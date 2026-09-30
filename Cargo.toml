@@ -1,0 +1,22 @@
+[package]
+name = "alc-migrations"
+version = "0.152.0"
+edition = "2021"
+rust-version = "1.92"
+description = "ippoan alc-api の DB migration (sqlx) を埋め込んだ crate"
+license = "MIT"
+repository = "https://github.com/ippoan/alc-migrations"
+readme = "README.md"
+include = ["src/**", "migrations/**", "scripts/*.sql", "Cargo.toml", "README.md", "LICENSE"]
+
+[features]
+cli = ["dep:tokio", "sqlx/runtime-tokio", "sqlx/tls-rustls", "sqlx/postgres"]
+
+[dependencies]
+sqlx = { version = "0.8", default-features = false, features = ["migrate", "macros"] }
+tokio = { version = "1", features = ["rt", "macros"], optional = true }
+
+[[bin]]
+name = "alc-migrate"
+path = "src/bin/alc-migrate.rs"
+required-features = ["cli"]

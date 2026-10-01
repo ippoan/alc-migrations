@@ -1,4 +1,4 @@
--- CI の replay job 専用の検査 (migration 153・154)。crate には含めない (scripts/ ではなく ci/ に置く)。
+-- CI の replay job 専用の検査 (migration 153〜155)。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
 -- init → 全 migration → grants を流した後の DB に対して、アプリのロール alc_api_app で
 -- 「dev の軸」(is_dev 列 + RLS + set_current_tenant) と 'IT点呼' を確かめる。
@@ -62,7 +62,7 @@ LANGUAGE sql AS $$
 $$;
 
 -- 8 表に 1 行ずつ、is_dev を指定せずに INSERT する (backend と同じ書き方)。
--- 入った行の is_dev を chk.visible() と同じ順で返す。
+-- 入った行の is_dev を chk.visible() と同じ順で返す。p_seq は hub_measurements の seq。
 CREATE FUNCTION chk.insert_all(p_seq BIGINT) RETURNS BOOLEAN[]
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -86,6 +86,8 @@ BEGIN
     VALUES (v_tenant, v_employee, 'post_operation')
     RETURNING id, is_dev INTO v_session, v;
     v_out := v_out || v;
+    -- 作った session の id を chk.session_<seq> に控える (軸をまたぐ参照の検査で使う)
+    PERFORM set_config('chk.session_' || p_seq, v_session::TEXT, false);
 
     INSERT INTO alc_api.tenko_records
         (tenant_id, session_id, employee_id, tenko_type, status, record_data, employee_name, record_hash)
@@ -163,6 +165,39 @@ BEGIN
 END
 $$;
 
+-- 8 表それぞれで、いま見えている行の is_dev を p_to へ書き換える UPDATE が、全部 RLS (42501) で
+-- 拒否されることを確かめる。1 表でも通ったら (0 行で空振りした場合も) 例外。
+CREATE FUNCTION chk.expect_axis_update_rejected(p_to BOOLEAN) RETURNS VOID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_tbl TEXT;
+BEGIN
+    FOREACH v_tbl IN ARRAY ARRAY[
+        'tenko_schedules', 'measurements', 'tenko_sessions', 'tenko_records',
+        'tenko_carrying_item_checks', 'hub_measurements', 'webhook_deliveries', 'equipment_failures'
+    ] LOOP
+        BEGIN
+            IF v_tbl = 'tenko_records' THEN
+                -- 完了済みの行の UPDATE は trigger が RLS より先に止める (検査 7)。
+                -- 完了していない行を作って確かめる (拒否の例外で、この行ごと巻き戻る)。
+                INSERT INTO alc_api.tenko_records
+                    (tenant_id, session_id, employee_id, tenko_type, status, record_data, employee_name, record_hash)
+                SELECT s.tenant_id, s.id, s.employee_id, 'post_operation', 'cancelled', '{}', 'ci check', 'ci check'
+                  FROM alc_api.tenko_sessions s
+                 ORDER BY s.created_at
+                 LIMIT 1;
+                UPDATE alc_api.tenko_records SET is_dev = p_to WHERE status <> 'completed';
+            ELSE
+                EXECUTE format('UPDATE alc_api.%I SET is_dev = %L', v_tbl, p_to);
+            END IF;
+        EXCEPTION WHEN insufficient_privilege THEN
+            CONTINUE;
+        END;
+        RAISE EXCEPTION 'alc_api.% の is_dev を % へ書き換える UPDATE が RLS で拒否されなかった', v_tbl, p_to;
+    END LOOP;
+END
+$$;
+
 -- ---------------------------------------------------------------------------
 -- ここからアプリのロール (NOBYPASSRLS)
 -- ---------------------------------------------------------------------------
@@ -214,17 +249,47 @@ BEGIN
 END
 $$;
 
--- 4a. dev の接続から is_dev = false を明示した INSERT / UPDATE は拒否される。
+-- 2b. dev の接続から、本番の session (検査 1 で作った、dev からは見えない) を指す行。
+--     chk.session_2 = 本番の session、chk.session_3 = dev の session。
 DO $$
+DECLARE
+    v_is_dev BOOLEAN;
+    v_count  BIGINT;
 BEGIN
-    PERFORM chk.expect_explicit_insert_rejected(false);
+    -- tenko_carrying_item_checks: ポリシーが session を tenko_sessions の RLS 越しに引くので、
+    -- 見えない session を指す行は拒否される。
     BEGIN
-        UPDATE alc_api.measurements SET is_dev = false;
-        RAISE EXCEPTION '4a: dev の行を is_dev = false へ UPDATE できてしまった';
+        INSERT INTO alc_api.tenko_carrying_item_checks (session_id, item_id, item_name)
+        VALUES (current_setting('chk.session_2')::UUID, current_setting('chk.carrying_item_id')::UUID, 'ci check');
+        RAISE EXCEPTION '2b: dev の接続から本番の session を指す携行品チェックを INSERT できてしまった';
     EXCEPTION WHEN insufficient_privilege THEN
         NULL;
     END;
-    RAISE NOTICE 'ok 4a: dev の接続からの is_dev = false の明示は RLS で拒否 (INSERT 8 表 + UPDATE)';
+
+    -- tenko_records: ポリシーは session を見ず、FK の参照整合は RLS を迂回するので、
+    -- 見えない本番の session の id を指す INSERT は「通る」(今回の設計の既知の性質)。
+    -- 入った行は dev の行 (is_dev = true) で、本番の接続からは見えない (検査 3b)。
+    INSERT INTO alc_api.tenko_records
+        (tenant_id, session_id, employee_id, tenko_type, status, record_data, employee_name, record_hash)
+    VALUES (current_setting('chk.tenant_id')::UUID, current_setting('chk.session_2')::UUID,
+            current_setting('chk.employee_id')::UUID, 'post_operation', 'completed', '{}', 'ci check', 'ci check')
+    RETURNING is_dev INTO v_is_dev;
+    ASSERT v_is_dev, '2b: dev の接続から本番の session を指して書いた tenko_records が is_dev = true になっていない';
+
+    SELECT count(*) INTO v_count FROM alc_api.tenko_records
+     WHERE session_id = current_setting('chk.session_2')::UUID;
+    ASSERT v_count = 1, format('2b: dev の接続から、本番の session を指す tenko_records が %s 行見える (自分の 1 行だけのはず)', v_count);
+
+    RAISE NOTICE 'ok 2b: dev の接続から本番の session を指す行 — 携行品チェックは拒否、tenko_records は dev の行として入る';
+END
+$$;
+
+-- 4a. dev の接続から is_dev = false を明示した INSERT / UPDATE は拒否される (8 表)。
+DO $$
+BEGIN
+    PERFORM chk.expect_explicit_insert_rejected(false);
+    PERFORM chk.expect_axis_update_rejected(false);
+    RAISE NOTICE 'ok 4a: dev の接続からの is_dev = false の明示は RLS で拒否 (INSERT 8 表 + UPDATE 8 表)';
 END
 $$;
 
@@ -240,17 +305,35 @@ BEGIN
 END
 $$;
 
--- 4b. dev でない接続から is_dev = true を明示した INSERT / UPDATE は拒否される。
+-- 3b. dev でない接続から、dev の session を指す行 (2b の逆向き)。
 DO $$
+DECLARE
+    v_count BIGINT;
 BEGIN
-    PERFORM chk.expect_explicit_insert_rejected(true);
     BEGIN
-        UPDATE alc_api.measurements SET is_dev = true;
-        RAISE EXCEPTION '4b: 本番の行を is_dev = true へ UPDATE できてしまった';
+        INSERT INTO alc_api.tenko_carrying_item_checks (session_id, item_id, item_name)
+        VALUES (current_setting('chk.session_3')::UUID, current_setting('chk.carrying_item_id')::UUID, 'ci check');
+        RAISE EXCEPTION '3b: dev でない接続から dev の session を指す携行品チェックを INSERT できてしまった';
     EXCEPTION WHEN insufficient_privilege THEN
         NULL;
     END;
-    RAISE NOTICE 'ok 4b: dev でない接続からの is_dev = true の明示は RLS で拒否 (INSERT 8 表 + UPDATE)';
+
+    -- 2b で dev の接続が本番の session を指して書いた tenko_records は、本番からは見えない。
+    -- 見えるのは検査 1 で作った本番の 1 行だけ。
+    SELECT count(*) INTO v_count FROM alc_api.tenko_records
+     WHERE session_id = current_setting('chk.session_2')::UUID;
+    ASSERT v_count = 1, format('3b: 本番の session を指す tenko_records が本番の接続から %s 行見える (1 行のはず)', v_count);
+
+    RAISE NOTICE 'ok 3b: dev でない接続から dev の session を指す携行品チェックは拒否。dev が書いた tenko_records は見えない';
+END
+$$;
+
+-- 4b. dev でない接続から is_dev = true を明示した INSERT / UPDATE は拒否される (8 表)。
+DO $$
+BEGIN
+    PERFORM chk.expect_explicit_insert_rejected(true);
+    PERFORM chk.expect_axis_update_rejected(true);
+    RAISE NOTICE 'ok 4b: dev でない接続からの is_dev = true の明示は RLS で拒否 (INSERT 8 表 + UPDATE 8 表)';
 END
 $$;
 

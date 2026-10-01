@@ -8,6 +8,12 @@
 -- 4 値目の 'IT点呼' を追加する。tenko_records.tenko_method には CHECK が無い
 -- (migration 015 は DEFAULT のみ) ので触らない。
 
+-- ロックを取れないまま待ち続けると、その後ろに本番の問い合わせが詰まる。10 秒で取れなければ
+-- migration を失敗させる (DB は無変更でデプロイが止まるだけなので、やり直せる)。
+-- SET LOCAL なので、この migration の transaction の中だけに効く。
+-- statement_timeout は付けない (CHECK の全走査や index の作成を途中で切らないため)。
+SET LOCAL lock_timeout = '10s';
+
 -- 1. CHECK の張り直し。制約名を決め打ちせず pg_constraint から引く (理由は 144 の冒頭)。
 --    「tenko_method 列の CHECK がちょうど 1 個」でなければ RAISE EXCEPTION で落とす。
 DO $$

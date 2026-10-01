@@ -22,13 +22,20 @@
 -- ---------------------------------------------------------------------------
 -- 足すだけ (expand)
 -- ---------------------------------------------------------------------------
--- 列・index を足し、ポリシーと関数を置き換えるだけで、消すものは無い。
+-- 列を足し、ポリシーと関数を置き換えるだけで、消すものは無い。
 -- hub_measurements の 3 列 unique (migration 126) も残す。古い backend は
--- ON CONFLICT (tenant_id, device_id, seq) でその制約を推論しているので、ここで
--- 4 列に置き換えると INSERT が全件落ちる。3 列を落とすのは、backend が 4 列へ
--- 切り替わって本番に出た後の別 migration で行う。
+-- ON CONFLICT (tenant_id, device_id, seq) でその制約を推論しているので、
+-- 4 列に置き換えると INSERT が全件落ちる。is_dev を含む 4 列の unique index は
+-- migration 155 で「足す」(この migration は 8 表に ACCESS EXCLUSIVE を取るので、
+-- index の作成を同じ transaction に入れると、作っているあいだ 8 表が全部止まる)。
+-- 3 列を落とすのは、backend が 4 列へ切り替わって本番に出た後の別 migration で行う。
 --
 -- tenko_call_logs は対象外 (電話点呼の経路は端末の鍵を持たず dev になり得ない)。
+
+-- ロックを取れないまま待ち続けると、その後ろに本番の問い合わせが詰まる。10 秒で取れなければ
+-- migration を失敗させる (DB は無変更でデプロイが止まるだけなので、やり直せる)。
+-- SET LOCAL なので、この migration の transaction の中だけに効く。
+SET LOCAL lock_timeout = '10s';
 
 -- 0. 前提の確認 (144 と同じ「沈黙しない」方針)。
 --    下の ALTER POLICY は「各表で RLS が有効で、ポリシーがこの 1 本 (全コマンド用) だけ」で
@@ -220,16 +227,7 @@ ALTER POLICY tenant_isolation_tenko_schedules ON alc_api.tenko_schedules
         AND is_dev = (coalesce(current_setting('app.device_dev', true), '') = '1')
     );
 
--- 3. hub_measurements の再送冪等の鍵に is_dev を足した unique index を「足す」。
---    同じ端末の同じ seq が dev と本番の両方にあり得るようにするための土台。
---    既存の UNIQUE (tenant_id, device_id, seq) は残すので、この migration の時点では
---    まだ 3 列で弾かれる (backend が 4 列へ切り替わった後の別 migration で 3 列を落とす)。
---
---    CONCURRENTLY にしていないのは migration がトランザクション内で走るため (135 と同じ)。
-CREATE UNIQUE INDEX hub_measurements_tenant_device_seq_is_dev
-    ON alc_api.hub_measurements (tenant_id, device_id, seq, is_dev);
-
--- 4. set_current_tenant は毎回 dev の設定値を消す。
+-- 3. set_current_tenant は毎回 dev の設定値を消す。
 --    backend には SQL で直接 SELECT set_current_tenant($1) を呼ぶ経路があり、接続プールで
 --    接続は使い回される。関数自体が消さないと、前の要求が立てた '1' が次の要求に残る。
 --    dev の接続にしたい側は、この関数を呼んだ「後」に app.device_dev を立てる。

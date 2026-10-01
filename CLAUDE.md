@@ -15,9 +15,15 @@ alc-api の DB migration (sqlx) を埋め込んだ薄い crate。SQL 以外の�
 ## 版の規約
 `0.<最新の migration 番号>.<patch>`。minor = migration 番号、patch = SQL 以外の変更。
 
+## 配り方
+rust-alc-api が git 依存 (rev 固定) で読む。取り込みは rust-alc-api の `Cargo.toml` の rev を上げる。
+tag は打たない。crates.io には出さない (`publish = false`)。
+
 ## public repo の注意
 ホスト名・ID・本番データを migration・コメント・コミットに書かない。
 
 ## 検証
 `cargo fmt --check && cargo clippy --all-features -- -D warnings && cargo test`。
-DB を使う確認は CI の `replay` job (init → alc-migrate → grants → `_sqlx_migrations` の件数)。
+DB を使う確認は CI の `replay` job (init → alc-migrate → grants → `_sqlx_migrations` の件数 → `ci/*.sql` の検査)。
+migration を足したら `ci.yml` の件数の期待値 (`<件数> | <最大番号>`。133 が欠番なので件数 = 最大番号 − 1) も更新する。
+検査用の SQL は `ci/` に置く (`scripts/*.sql` は crate に含まれるので置かない)。

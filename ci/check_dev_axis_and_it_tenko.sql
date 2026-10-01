@@ -1,15 +1,27 @@
 -- CI の replay job 専用の検査 (migration 153〜157)。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
--- init → 全 migration → grants を流した後の DB に対して、アプリのロール alc_api_app で
+-- init → 全 migration → grants を流した後の DB に対して、アプリのロールで
 -- 「dev の軸」(is_dev 列 + RLS + set_current_tenant) と 'IT点呼' を確かめる。
 -- 全体を 1 transaction で流して最後に ROLLBACK するので、DB には何も残らない。
 -- id はその場で作る (実在の tenant_id / device_id は書かない)。
 --
 --   psql -v ON_ERROR_STOP=1 -f ci/check_dev_axis_and_it_tenko.sql
+--   psql -v ON_ERROR_STOP=1 -v app_role=alc_api_rt -v owner_role=alc_api_app -f ci/check_dev_axis_and_it_tenko.sql
+--
+-- 変数 (psql の -v):
+--   app_role   — 検査を流すロール。既定は alc_api_app (表の所有者が postgres の軸)。
+--                表の所有者が alc_api_app の軸 (本番と同じ構成) では、所有者でない alc_api_rt を渡す
+--                (所有者には FORCE の無い表のポリシーが掛からないので、alc_api_app では検査にならない)
+--   owner_role — 渡したときだけ、最後に「表の所有者の接続では dev の行が見えてしまう」ことを確かめる
+--                (検査 10。いまの状態の記録)
 --
 -- どれか 1 つでも期待と違えば例外で止まる (psql の終了コードが 0 でなくなる)。
 
 \set ON_ERROR_STOP on
+\if :{?app_role}
+\else
+    \set app_role alc_api_app
+\endif
 SET plpgsql.check_asserts = on;
 
 BEGIN;
@@ -42,7 +54,7 @@ SELECT set_config('chk.employee_id', e.id::TEXT, false),
   FROM e, w, c \gset chk_
 
 CREATE SCHEMA chk;
-GRANT USAGE ON SCHEMA chk TO alc_api_app;
+GRANT USAGE ON SCHEMA chk TO :"app_role";
 
 -- 8 表の「いまの接続から見える行数」。SECURITY INVOKER なので呼んだロールの RLS が効く。
 -- 順番: tenko_schedules, measurements, tenko_sessions, tenko_records,
@@ -201,7 +213,7 @@ $$;
 -- ---------------------------------------------------------------------------
 -- ここからアプリのロール (NOBYPASSRLS)
 -- ---------------------------------------------------------------------------
-SET ROLE alc_api_app;
+SET ROLE :"app_role";
 
 -- 0. app.device_dev を一度も立てていない接続 (migration 適用直後の古い backend と同じ)。
 --    set_current_tenant も通さず、テナントだけを直接立てる。未設定 (NULL) は dev でない。
@@ -537,4 +549,50 @@ END
 $$;
 
 RESET ROLE;
+
+-- 10. 表の所有者の接続では、dev の行もほかのテナントの行も見えてしまう (owner_role を渡した軸だけ)。
+--     PostgreSQL は FORCE ROW LEVEL SECURITY の無い表では所有者にポリシーを適用しない。
+--     本番で migration を流すロールは表の所有者なので、そのロールで繋ぐと 8 表の分離は効かない
+--     (だから backend は所有者でない alc_api_rt で繋ぐ)。
+--     これは「いまの状態の記録」。8 表に FORCE を足したら、所有者にもポリシーが掛かるので、
+--     この検査を「所有者からも見えない」に直すこと。
+\if :{?owner_role}
+    SELECT count(*) > 0 AS not_owned
+      FROM pg_class c
+     WHERE c.relnamespace = 'alc_api'::regnamespace
+       AND c.relname IN ('tenko_schedules', 'measurements', 'tenko_sessions', 'tenko_records',
+                         'tenko_carrying_item_checks', 'hub_measurements', 'webhook_deliveries', 'equipment_failures')
+       AND c.relowner <> :'owner_role'::regrole \gset chk_
+    \if :chk_not_owned
+        \echo '10: owner_role に渡したロールが 8 表の所有者でない (軸の準備が違う)'
+        SELECT 1 / 0;
+    \endif
+
+    SET ROLE :"owner_role";
+    DO $$
+    DECLARE
+        v_dev INT[];
+    BEGIN
+        -- dev でない接続にして、別のテナントを立てる。ポリシーが掛かっていれば 1 行も見えない (検査 8)。
+        PERFORM alc_api.set_current_tenant(gen_random_uuid()::TEXT);
+
+        SELECT ARRAY[
+            (SELECT count(*) FROM alc_api.tenko_schedules WHERE is_dev),
+            (SELECT count(*) FROM alc_api.measurements WHERE is_dev),
+            (SELECT count(*) FROM alc_api.tenko_sessions WHERE is_dev),
+            (SELECT count(*) FROM alc_api.tenko_records WHERE is_dev),
+            (SELECT count(*) FROM alc_api.tenko_carrying_item_checks WHERE is_dev),
+            (SELECT count(*) FROM alc_api.hub_measurements WHERE is_dev),
+            (SELECT count(*) FROM alc_api.webhook_deliveries WHERE is_dev),
+            (SELECT count(*) FROM alc_api.equipment_failures WHERE is_dev)
+        ]::INT[] INTO v_dev;
+
+        ASSERT 0 <> ALL (v_dev),
+            format('10: 表の所有者の接続から dev の行が見えない表が在る (FORCE を足したなら、この検査を直す): %s', v_dev);
+        RAISE NOTICE 'ok 10: 表の所有者の接続では、別テナント・dev でない接続でも dev の行が見える (8 表。FORCE が無いため): %', v_dev;
+    END
+    $$;
+    RESET ROLE;
+\endif
+
 ROLLBACK;

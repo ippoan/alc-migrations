@@ -31,10 +31,21 @@ jobs:
       - run: cargo clippy --all-features -- -D warnings
       - run: cargo test
 
-  # 空の DB に 0 から全 migration を流し、本番と同じ順 (init → migrate → grants) で通ることを確認する
+  # 空の DB に 0 から全 migration を流し、本番と同じ順 (init → migrate → grants) で通ることを確認する。
+  # 軸は「migration を流すロール」= 表の所有者になるロール:
+  #   * postgres    — superuser が流す (テスト用 DB・staging と同じ)。表の所有者は postgres で、
+  #                   alc_api_app も alc_api_rt も所有者でない。migration の GRANT 漏れはこの軸でしか
+  #                   見つからない (所有者には GRANT が要らないため)
+  #   * alc_api_app — 本番と同じ。alc_api_app が流して全表の所有者になり、backend は所有者でない
+  #                   alc_api_rt で繋ぐ。所有者には FORCE の無い表のポリシーが掛からないので、
+  #                   RLS が実際に掛かることは、この軸で alc_api_rt から確かめる
   replay:
     name: replay
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        migrate_as: [postgres, alc_api_app]
     services:
       postgres:
         image: postgres:16
@@ -52,7 +63,12 @@ jobs:
       PGHOST: localhost
       PGUSER: postgres
       PGDATABASE: postgres
-      DATABASE_URL: postgresql://postgres:test@localhost:5432/postgres
+      # migration を流す接続 (軸のロール。パスワードは CI の使い捨て)
+      DATABASE_URL: postgresql://${{ matrix.migrate_as }}:test@localhost:5432/postgres
+      # RLS の検査を流すロール = その軸で表の所有者でない、アプリのロール
+      APP_ROLE: ${{ matrix.migrate_as == 'alc_api_app' && 'alc_api_rt' || 'alc_api_app' }}
+      # 表の所有者が alc_api_app の軸だけ、所有者の接続から dev の行が見えてしまうこと (いまの状態の記録) も確かめる
+      OWNER_ROLE: ${{ matrix.migrate_as == 'alc_api_app' && 'alc_api_app' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.92.0
@@ -61,7 +77,12 @@ jobs:
           shared-key: alc-migrations
       - name: init_local_db.sql
         run: psql -v ON_ERROR_STOP=1 -f scripts/init_local_db.sql
-      - name: migrate (0 -> latest)
+      # 本番で migration の外で済ませてあること (alc_api_app が繋げて表を作れる / alc_api_rt が在り
+      # schema の USAGE を持つ) を、superuser が再現する
+      - name: setup_owner_axis.sql (alc_api_app の軸だけ)
+        if: matrix.migrate_as == 'alc_api_app'
+        run: psql -v ON_ERROR_STOP=1 -v app_password="$PGPASSWORD" -f ci/setup_owner_axis.sql
+      - name: migrate (0 -> latest) as ${{ matrix.migrate_as }}
         run: cargo run --features cli --bin alc-migrate
       - name: local_app_grants.sql
         run: psql -v ON_ERROR_STOP=1 -f scripts/local_app_grants.sql
@@ -72,11 +93,35 @@ jobs:
             got=$(psql -At -F ' | ' -c "SELECT count(*), max(version) FROM alc_api._sqlx_migrations")
           fi
           echo "$got"
-          test "$got" = "156 | 157"
-      # アプリのロール (alc_api_app) で dev の軸 (153・155・156)・IT点呼 (154)・判定の確認の方法 (157) を確かめる。
-      # 1 transaction で流して ROLLBACK するので DB には何も残らない
-      - name: check dev axis / IT点呼 (153-157)
-        run: psql -v ON_ERROR_STOP=1 -f ci/check_dev_axis_and_it_tenko.sql
+          test "$got" = "157 | 158"
+      - name: table owner
+        run: |
+          got=$(psql -At -c "SELECT DISTINCT relowner::regrole FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p')")
+          echo "$got"
+          test "$got" = "${{ matrix.migrate_as }}"
+      # ポリシーを書いたが backend (alc_api_rt) に効いていない、を落とす。何も変更しない
+      - name: check RLS invariants
+        run: psql -v ON_ERROR_STOP=1 -f ci/check_rls_invariants.sql
+      # 本番の SQL エディタで流す「1 文で結果が返る版」(ファイル末尾のコメント) も同じ結果になること
+      - name: check RLS invariants (1 文の版が 0 行)
+        run: |
+          sql=$(grep '^--|' ci/check_rls_invariants.sql | sed 's/^--| \{0,1\}//')
+          test -n "$sql"
+          got=$(printf '%s\n' "$sql" | psql -At -v ON_ERROR_STOP=1)
+          echo "$got"
+          test -z "$got"
+      # アプリのロール (その軸で所有者でないロール) で dev の軸 (153・155・156)・IT点呼 (154)・
+      # 判定の確認の方法 (157) を確かめる。alc_api_app の軸では、所有者の接続だと dev の行が
+      # 見えてしまうこと (いまの状態の記録) も確かめる。1 transaction で流して ROLLBACK するので
+      # DB には何も残らない
+      - name: check dev axis / IT点呼 (153-157) as ${{ env.APP_ROLE }}
+        run: |
+          psql -v ON_ERROR_STOP=1 -v app_role="$APP_ROLE" ${OWNER_ROLE:+-v owner_role="$OWNER_ROLE"} \
+            -f ci/check_dev_axis_and_it_tenko.sql
+      # 実行用ロール alc_api_rt で、認証前・テナント横断の関数 (158) を tenant context 無しで呼べること、
+      # 表への直接の問い合わせには RLS が掛かること
+      - name: check runtime role (158)
+        run: psql -v ON_ERROR_STOP=1 -f ci/check_runtime_role.sql
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない
   safety:

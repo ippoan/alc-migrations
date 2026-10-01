@@ -72,10 +72,10 @@ jobs:
             got=$(psql -At -F ' | ' -c "SELECT count(*), max(version) FROM alc_api._sqlx_migrations")
           fi
           echo "$got"
-          test "$got" = "154 | 155"
-      # アプリのロール (alc_api_app) で dev の軸 (153・155) と IT点呼 (154) を確かめる。
+          test "$got" = "155 | 156"
+      # アプリのロール (alc_api_app) で dev の軸 (153・155・156) と IT点呼 (154) を確かめる。
       # 1 transaction で流して ROLLBACK するので DB には何も残らない
-      - name: check dev axis / IT点呼 (153-155)
+      - name: check dev axis / IT点呼 (153-156)
         run: psql -v ON_ERROR_STOP=1 -f ci/check_dev_axis_and_it_tenko.sql
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない

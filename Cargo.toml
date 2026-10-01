@@ -1,12 +1,13 @@
 [package]
 name = "alc-migrations"
-version = "0.152.0"
+version = "0.155.0"
 edition = "2021"
 rust-version = "1.92"
 description = "ippoan alc-api の DB migration (sqlx) を埋め込んだ crate"
 license = "MIT"
 repository = "https://github.com/ippoan/alc-migrations"
 readme = "README.md"
+publish = false
 include = ["src/**", "migrations/**", "scripts/*.sql", "Cargo.toml", "README.md", "LICENSE"]
 
 [features]

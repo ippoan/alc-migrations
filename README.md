@@ -8,9 +8,11 @@ SQL は rust-alc-api の `03e0571` から 1 バイトも変えずに移してあ
 
 ## 使い方
 
+git 依存で読む (rev 固定)。crates.io には出していない。
+
 ```toml
 [dev-dependencies]
-alc-migrations = "0.152"
+alc-migrations = { git = "https://github.com/ippoan/alc-migrations", rev = "<コミットの SHA>" }
 ```
 
 ```rust
@@ -25,12 +27,11 @@ alc_migrations::MIGRATOR.run(&pool).await?;
 DATABASE_URL=postgresql://... cargo run --features cli --bin alc-migrate
 ```
 
-## 公開の手順
-1. `Cargo.toml` の版を migration 番号に合わせて PR → merge
-2. `v<版>` の tag を push (例: `v0.152.0`)
-3. `publish.yml` が crates.io の trusted publishing (OIDC) で `cargo publish` する。secret は不要
+## 取り込みの手順
+1. migration を足し、`Cargo.toml` の版を migration 番号に合わせて PR → merge
+2. rust-alc-api の `Cargo.toml` で、この crate の `rev` を merge 後の main のコミットの SHA に上げる
 
-初回のみ、crates.io で crate を作成し、trusted publishing に本 repo の `publish.yml` を登録しておく。
+tag は使わない。crates.io には出さない (`Cargo.toml` は `publish = false`)。
 
 ## License
 MIT

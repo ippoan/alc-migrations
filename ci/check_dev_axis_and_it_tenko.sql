@@ -1,4 +1,4 @@
--- CI の replay job 専用の検査 (migration 153〜156)。crate には含めない (scripts/ ではなく ci/ に置く)。
+-- CI の replay job 専用の検査 (migration 153〜157)。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
 -- init → 全 migration → grants を流した後の DB に対して、アプリのロール alc_api_app で
 -- 「dev の軸」(is_dev 列 + RLS + set_current_tenant) と 'IT点呼' を確かめる。
@@ -482,6 +482,57 @@ BEGIN
     ASSERT chk.visible() = ARRAY[0, 0, 0, 0, 0, 0, 0, 0],
         format('8: 別テナントの dev の接続から行が見えている: %s', chk.visible());
     RAISE NOTICE 'ok 8: 別のテナントからは dev でも本番でも見えない (8 表)';
+END
+$$;
+
+-- 9. 判定の「確認の方法」(migration 157)。検査 6 が本番の軸に作った IT点呼 の session に対して、
+--    manager_judgment_method に 'it' / 'in_person' / NULL は入り、それ以外は CHECK で落ちる。
+--    行は元へ戻さない (ファイル全体が 1 transaction で、最後に ROLLBACK する)。
+DO $$
+DECLARE
+    v_session UUID;
+    v_method  TEXT;
+    v_rows    BIGINT;
+    v_bad     TEXT;
+BEGIN
+    -- 検査 8 が別テナントの dev の接続にしたので、元のテナントの本番の接続へ戻す
+    PERFORM alc_api.set_current_tenant(current_setting('chk.tenant_id'));
+
+    -- 列を指定せずに作った行は NULL (既定値なし)
+    SELECT id, manager_judgment_method INTO STRICT v_session, v_method
+      FROM alc_api.tenko_sessions
+     WHERE tenko_method = 'IT点呼';
+    ASSERT v_method IS NULL,
+        format('9: 列を指定せずに作った session の manager_judgment_method が NULL でない: %L', v_method);
+
+    UPDATE alc_api.tenko_sessions SET manager_judgment_method = 'it' WHERE id = v_session;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    ASSERT v_rows = 1, format('9: ''it'' への UPDATE が %s 行 (1 行のはず)', v_rows);
+
+    UPDATE alc_api.tenko_sessions SET manager_judgment_method = 'in_person' WHERE id = v_session;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    ASSERT v_rows = 1, format('9: ''in_person'' への UPDATE が %s 行 (1 行のはず)', v_rows);
+
+    -- それ以外の値 (点呼方法の名前、空文字、大文字) は CHECK で落ちる
+    FOREACH v_bad IN ARRAY ARRAY['IT点呼', '', 'IT'] LOOP
+        BEGIN
+            UPDATE alc_api.tenko_sessions SET manager_judgment_method = v_bad WHERE id = v_session;
+        EXCEPTION WHEN check_violation THEN
+            CONTINUE;
+        END;
+        RAISE EXCEPTION '9: manager_judgment_method = % が CHECK を通ってしまった', quote_literal(v_bad);
+    END LOOP;
+
+    -- 落ちた UPDATE は行を変えていない
+    SELECT manager_judgment_method INTO STRICT v_method FROM alc_api.tenko_sessions WHERE id = v_session;
+    ASSERT v_method = 'in_person',
+        format('9: CHECK で落ちた UPDATE の後の値が ''in_person'' でない: %L', v_method);
+
+    UPDATE alc_api.tenko_sessions SET manager_judgment_method = NULL WHERE id = v_session;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    ASSERT v_rows = 1, format('9: NULL への UPDATE が %s 行 (1 行のはず)', v_rows);
+
+    RAISE NOTICE 'ok 9: manager_judgment_method は ''it'' / ''in_person'' / NULL が入り、それ以外は CHECK で落ちる';
 END
 $$;
 

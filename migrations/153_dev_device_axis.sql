@@ -31,14 +31,20 @@
 -- tenko_call_logs は対象外 (電話点呼の経路は端末の鍵を持たず dev になり得ない)。
 
 -- 0. 前提の確認 (144 と同じ「沈黙しない」方針)。
---    下の ALTER POLICY は「各表のポリシーがこの 1 本だけ」であることに依存する。
---    ポリシーは OR で効くので、migration 履歴の外で別のポリシーが足されていると、
---    そちらを通って dev の行が見えてしまう。名前が違う・本数が違う場合は、
---    黙って穴を残さずここで落とす。
+--    下の ALTER POLICY は「各表で RLS が有効で、ポリシーがこの 1 本 (全コマンド用) だけ」で
+--    あることに依存する。
+--    * ポリシーは OR で効くので、migration 履歴の外で別のポリシーが足されていると、
+--      そちらを通って dev の行が見えてしまう
+--    * コマンド別 (FOR SELECT 等) のポリシーだと、USING / WITH CHECK の足し方が変わる
+--    * RLS が無効なら、ポリシーを直しても分離が効かない
+--    どれかが違う場合は、黙って穴を残さずここで落とす (migration は 1 transaction なので
+--    DB は変わらない)。
 DO $$
 DECLARE
-    r       RECORD;
-    v_names TEXT[];
+    r        RECORD;
+    v_rls    BOOLEAN;
+    v_count  INT;
+    v_found  TEXT[];
 BEGIN
     FOR r IN
         SELECT * FROM (VALUES
@@ -52,18 +58,34 @@ BEGIN
             ('tenko_schedules',            'tenant_isolation_tenko_schedules')
         ) AS t(tbl, pol)
     LOOP
-        SELECT coalesce(array_agg(p.policyname::TEXT ORDER BY p.policyname), '{}')
-          INTO v_names
+        -- 表が alc_api に無ければ v_rls は NULL のまま (下の IS NOT TRUE で落ちる)
+        v_rls := NULL;
+        SELECT c.relrowsecurity
+          INTO v_rls
+          FROM pg_class c
+         WHERE c.oid = to_regclass(format('alc_api.%I', r.tbl));
+
+        IF v_rls IS NOT TRUE THEN
+            RAISE EXCEPTION
+                'migration 153: alc_api.% で RLS が有効になっていません (表が alc_api に無い場合も含む)。'
+                ' RLS が無効だとポリシーを直しても dev の行は分離されません。'
+                ' pg_class.relrowsecurity を確認してから再実行してください。',
+                r.tbl;
+        END IF;
+
+        SELECT count(*),
+               coalesce(array_agg(format('%s (%s)', p.policyname, p.cmd) ORDER BY p.policyname), '{}')
+          INTO v_count, v_found
           FROM pg_policies p
          WHERE p.schemaname = 'alc_api'
            AND p.tablename = r.tbl;
 
-        IF v_names <> ARRAY[r.pol] THEN
+        IF v_count <> 1 OR v_found <> ARRAY[format('%s (ALL)', r.pol)] THEN
             RAISE EXCEPTION
-                'migration 153: alc_api.% のポリシーが想定と違います (想定: {%} / 実際: %)。'
-                ' migration 履歴の外でポリシーが足された・改名された可能性があります。'
+                'migration 153: alc_api.% のポリシーが % 本見つかりました: % (想定は "% (ALL)" の 1 本だけ)。'
+                ' migration 履歴の外でポリシーが足された・改名された・コマンド別に張り直された可能性があります。'
                 ' pg_policies を確認してから再実行してください。',
-                r.tbl, r.pol, v_names;
+                r.tbl, v_count, v_found, r.pol;
         END IF;
     END LOOP;
 

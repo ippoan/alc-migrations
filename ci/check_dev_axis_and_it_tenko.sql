@@ -1,4 +1,4 @@
--- CI の replay job 専用の検査 (migration 153〜155)。crate には含めない (scripts/ ではなく ci/ に置く)。
+-- CI の replay job 専用の検査 (migration 153〜156)。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
 -- init → 全 migration → grants を流した後の DB に対して、アプリのロール alc_api_app で
 -- 「dev の軸」(is_dev 列 + RLS + set_current_tenant) と 'IT点呼' を確かめる。
@@ -337,32 +337,85 @@ BEGIN
 END
 $$;
 
--- 5. hub_measurements: 4 列の unique index が在り、3 列の unique も残っている。
---    古い backend の ON CONFLICT (tenant_id, device_id, seq) が推論できること (できなければ 42P10)。
+-- 5. hub_measurements: 3 列の unique は無く (migration 156)、4 列の unique index だけが在る。
+--    同じ (tenant, device, seq) が dev の軸と本番の軸の両方に入り、
+--    同じ軸での再送は ON CONFLICT (tenant_id, device_id, seq, is_dev) で弾かれる。
+--    ここまでの行: 本番の軸に seq 1・2 (検査 0・1)、dev の軸に seq 3 (検査 2)。
 DO $$
 DECLARE
-    v_rows BIGINT;
+    v_tenant CONSTANT UUID := current_setting('chk.tenant_id')::UUID;
+    v_device CONSTANT TEXT := current_setting('chk.device_id');
+    v_count  BIGINT;
+    v_rows   BIGINT;
 BEGIN
+    -- (a) 鍵の列がちょうど tenant_id / device_id / seq の 3 つである unique は、制約としても
+    --     index としても残っていない。
+    SELECT count(*) INTO v_count
+      FROM pg_constraint c
+     WHERE c.conrelid = 'alc_api.hub_measurements'::regclass
+       AND c.contype = 'u'
+       AND cardinality(c.conkey) = 3
+       AND (
+           SELECT array_agg(a.attname::TEXT)
+             FROM pg_attribute a
+            WHERE a.attrelid = c.conrelid
+              AND a.attnum = ANY (c.conkey)
+       ) @> ARRAY['tenant_id', 'device_id', 'seq'];
+    ASSERT v_count = 0, format('5a: hub_measurements に 3 列の UNIQUE 制約が %s 個残っている', v_count);
+    ASSERT NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+         WHERE schemaname = 'alc_api'
+           AND tablename = 'hub_measurements'
+           AND indexdef LIKE 'CREATE UNIQUE INDEX %(tenant_id, device_id, seq)'
+    ), '5a: hub_measurements に 3 列の unique index が残っている';
+
+    -- (b) 4 列の unique index は在る。
     ASSERT EXISTS (
         SELECT 1 FROM pg_indexes
          WHERE schemaname = 'alc_api'
            AND tablename = 'hub_measurements'
            AND indexname = 'hub_measurements_tenant_device_seq_is_dev'
            AND indexdef LIKE 'CREATE UNIQUE INDEX %(tenant_id, device_id, seq, is_dev)'
-    ), '5: hub_measurements の 4 列 unique index が無い';
-    ASSERT EXISTS (
-        SELECT 1 FROM pg_indexes
-         WHERE schemaname = 'alc_api'
-           AND tablename = 'hub_measurements'
-           AND indexdef LIKE 'CREATE UNIQUE INDEX %(tenant_id, device_id, seq)'
-    ), '5: hub_measurements の 3 列 unique が無くなっている';
+    ), '5b: hub_measurements の 4 列 unique index が無い';
 
+    -- (d) 本番の軸: seq 2 は本番に既に在るので、再送は 0 行。
     INSERT INTO alc_api.hub_measurements (tenant_id, device_id, kind, payload, seq)
-    VALUES (current_setting('chk.tenant_id')::UUID, current_setting('chk.device_id'), 'temperature', '{}', 2)
-    ON CONFLICT (tenant_id, device_id, seq) DO NOTHING;
+    VALUES (v_tenant, v_device, 'temperature', '{}', 2)
+    ON CONFLICT (tenant_id, device_id, seq, is_dev) DO NOTHING;
     GET DIAGNOSTICS v_rows = ROW_COUNT;
-    ASSERT v_rows = 0, '5: 同じ seq の再送が 3 列の ON CONFLICT で弾かれなかった';
-    RAISE NOTICE 'ok 5: hub_measurements に 4 列 unique が在り、3 列の ON CONFLICT も推論できる';
+    ASSERT v_rows = 0, '5d: 本番の軸で同じ seq の再送が 4 列の ON CONFLICT で弾かれなかった';
+
+    -- (c) 本番の軸: seq 3 は dev の軸にだけ在る。本番にも入る。
+    INSERT INTO alc_api.hub_measurements (tenant_id, device_id, kind, payload, seq)
+    VALUES (v_tenant, v_device, 'temperature', '{}', 3)
+    ON CONFLICT (tenant_id, device_id, seq, is_dev) DO NOTHING;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    ASSERT v_rows = 1, '5c: dev の軸に在る seq が本番の軸に入らなかった';
+
+    PERFORM set_config('app.device_dev', '1', false);
+
+    -- (d) dev の軸: seq 3 は dev に既に在るので、再送は 0 行。
+    INSERT INTO alc_api.hub_measurements (tenant_id, device_id, kind, payload, seq)
+    VALUES (v_tenant, v_device, 'temperature', '{}', 3)
+    ON CONFLICT (tenant_id, device_id, seq, is_dev) DO NOTHING;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    ASSERT v_rows = 0, '5d: dev の軸で同じ seq の再送が 4 列の ON CONFLICT で弾かれなかった';
+
+    -- (c) dev の軸: seq 2 は本番の軸にだけ在る。dev にも入る。
+    INSERT INTO alc_api.hub_measurements (tenant_id, device_id, kind, payload, seq)
+    VALUES (v_tenant, v_device, 'temperature', '{}', 2)
+    ON CONFLICT (tenant_id, device_id, seq, is_dev) DO NOTHING;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    ASSERT v_rows = 1, '5c: 本番の軸に在る seq が dev の軸に入らなかった';
+
+    -- 見える行数で両方の軸を確かめる: dev は seq 2・3、本番は seq 1・2・3。
+    SELECT count(*) INTO v_count FROM alc_api.hub_measurements;
+    ASSERT v_count = 2, format('5c: dev の接続から見える hub_measurements が %s 行 (2 行のはず)', v_count);
+    PERFORM alc_api.set_current_tenant(current_setting('chk.tenant_id'));
+    SELECT count(*) INTO v_count FROM alc_api.hub_measurements;
+    ASSERT v_count = 3, format('5c: 本番の接続から見える hub_measurements が %s 行 (3 行のはず)', v_count);
+
+    RAISE NOTICE 'ok 5: hub_measurements の 3 列 unique は無く、同じ seq が dev と本番の両方に入る。同じ軸の再送は 4 列の ON CONFLICT で弾く';
 END
 $$;
 

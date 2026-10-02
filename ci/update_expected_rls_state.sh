@@ -14,7 +14,7 @@
 # runtime_role_can_act_as_owner (真偽) に残る。
 #
 # ポリシーの式と関数の signature の文字列は、PostgreSQL の版と接続の search_path に依る
-# (CI は PostgreSQL 16、search_path に alc_api が入っている)。全部の表・関数が一斉に変わったら、
+# (CI は PostgreSQL 17 = 本番の major、search_path に alc_api が入っている)。全部の表・関数が一斉に変わったら、
 # migration ではなく版か search_path を疑う。
 #
 # 流すのは ci/rls_state.sql (カタログを読む SELECT 1 文) だけで、DB は何も変更しない。

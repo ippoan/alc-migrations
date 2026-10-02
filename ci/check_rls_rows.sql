@@ -7,6 +7,7 @@
 -- ポリシー (別の GUC 名・余計な OR・IS NOT NULL など) を落とせない。それをここで落とす。
 --
 -- 違反を 1 行ずつ返す (check, object, detail)。0 行なら合格。数の内訳は NOTICE (stderr) に出す。
+-- 「書きの保留」(下) は違反にせず、表ごとに 1 行の WARNING (stderr。「check_rls_rows: 保留: …」) を出す。
 -- このファイルは BEGIN / ROLLBACK を持たない。呼ぶ側が 1 transaction で包み、最後に ROLLBACK する
 -- (DB には何も残らない。tenko_records は UPDATE / DELETE を trigger が止めるので、後始末は ROLLBACK だけ)。
 -- ON_ERROR_STOP を外さない — 無いと SQL のエラーでも出力が空になり、合格に見える。
@@ -29,9 +30,9 @@
 --   seed.  tenant_id を持つ表の全部に、A・B の行を入れられる (入れられない表を黙って飛ばさない)。
 --          入れた後に、A の行と B の行が実際に在ることを superuser で数える
 --          (B の行が無いと、b の「A 以外の行が見えない」が空振りで合格になる)
---   exception. 下の「例外」に載せた表が、いまも例外のとおりに振る舞う (古くなった例外を残さない)
+--   exception. 下の「例外」「書きの保留」に載せた表が、いまも載せたとおりに振る舞う (古くなったものを残さない)
 --   count. a・b を確かめた表の数 = tenant_id を持つ表の数 − a・b の例外、
---          c を確かめた表の数 = tenant_id を持つ表の数 − c の例外 (数はカタログから数える)
+--          c を確かめた表の数 = tenant_id を持つ表の数 − c の例外と保留 (数はカタログから数える)
 --
 -- 行の入れ方 (NOT NULL で既定値の無い列だけを埋める。規則は表に依らない):
 --   * tenant_id          — そのテナント
@@ -52,8 +53,12 @@
 --   理由は check_rls_invariants.sql の検査 8 の許可リストと同じ:
 --   * tenko_call_numbers / tenko_call_drivers (tenant_id は TEXT)
 --   * device_registration_requests
---   書き (c は「通る」が期待)。check_rls_invariants.sql の許可リストに対応するものは無い
---   (検査 8 が見るのは式が true そのもののポリシーだけ)。式は true ではないが、tenant_id を見ない:
+--
+-- 書きの保留 (2 表。例外として認めるか・ポリシーを直すかは未判断。Refs ippoan/rust-alc-api#727)。
+-- c で、別のテナントの tenant_id での INSERT が実際に通る。違反にはせず (CI は落とさない)、通ったことを
+-- 確かめたうえで、表ごとに WARNING を毎回出す。通らなくなったら exception の違反 (ここから外す)。足さない。
+-- check_rls_invariants.sql の許可リストに対応するものは無い
+-- (検査 8 が見るのは式が true そのもののポリシーだけ)。式は true ではないが、tenant_id を見ない:
 --   * device_registration_requests  — device_reg_insert (migration 062):
 --                                       FOR INSERT WITH CHECK (status = 'pending')
 --                                     status が pending なら、どのテナントの tenant_id でも通る
@@ -94,21 +99,24 @@ CREATE TEMP TABLE chk_rls_violations (
     detail TEXT NOT NULL
 ) ON COMMIT DROP;
 
--- 例外 (理由は冒頭)。guc / guc_col は、c の前に立てる GUC と、その値を取る列 (INSERT する行の列)。
+-- 例外と、書きの保留 (理由は冒頭)。pending_policy が在る行は「書きの保留」(そのポリシーが通してしまう)。
+-- guc / guc_col は、c の前に立てる GUC と、その値を取る列 (INSERT する行の列)。
 CREATE TEMP TABLE chk_rls_exceptions (
-    tbl        TEXT PRIMARY KEY,
-    read_open  BOOLEAN NOT NULL,
-    write_open BOOLEAN NOT NULL,
-    guc        TEXT,
-    guc_col    TEXT
+    tbl            TEXT PRIMARY KEY,
+    read_open      BOOLEAN NOT NULL,
+    write_open     BOOLEAN NOT NULL,
+    pending_policy TEXT,
+    guc            TEXT,
+    guc_col        TEXT,
+    CHECK (pending_policy IS NULL OR write_open)
 ) ON COMMIT DROP;
 
-INSERT INTO chk_rls_exceptions (tbl, read_open, write_open, guc, guc_col) VALUES
-    ('vehicle_settings_dumps',       true,  true,  NULL, NULL),
-    ('tenko_call_numbers',           true,  false, NULL, NULL),
-    ('tenko_call_drivers',           true,  false, NULL, NULL),
-    ('device_registration_requests', true,  true,  NULL, NULL),
-    ('access_requests',              false, true,  'app.current_user_id', 'user_id');
+INSERT INTO chk_rls_exceptions (tbl, read_open, write_open, pending_policy, guc, guc_col) VALUES
+    ('vehicle_settings_dumps',       true,  true,  NULL,                     NULL, NULL),
+    ('tenko_call_numbers',           true,  false, NULL,                     NULL, NULL),
+    ('tenko_call_drivers',           true,  false, NULL,                     NULL, NULL),
+    ('device_registration_requests', true,  true,  'device_reg_insert',      NULL, NULL),
+    ('access_requests',              false, true,  'access_requests_insert', 'app.current_user_id', 'user_id');
 
 -- 種 (理由は冒頭)。expr は INSERT の VALUES にそのまま入る式。
 CREATE TEMP TABLE chk_rls_seeds (
@@ -343,7 +351,7 @@ BEGIN
     PERFORM set_config('app.current_tenant_id', v_a, true);
 
     FOR t IN
-        SELECT r.tbl, r.tbl_oid, r.read_open, r.write_open, r.insert_b, e.guc, e.guc_col
+        SELECT r.tbl, r.tbl_oid, r.read_open, r.write_open, r.insert_b, e.pending_policy, e.guc, e.guc_col
           FROM chk_rls_rows r
           LEFT JOIN chk_rls_exceptions e ON e.tbl = r.tbl
          WHERE r.seeded
@@ -416,8 +424,12 @@ BEGIN
             IF v_state IS NOT NULL THEN
                 INSERT INTO chk_rls_violations
                 VALUES ('exception', 'table ' || t.tbl,
-                        format('書きの例外が古い: テナント A から B の tenant_id での INSERT が通るはずが、%s %s',
-                               v_state, v_msg));
+                        format('書きの%sが古い: テナント A から B の tenant_id での INSERT が通るはずが、%s %s',
+                               CASE WHEN t.pending_policy IS NULL THEN '例外' ELSE '保留' END, v_state, v_msg));
+            ELSIF t.pending_policy IS NOT NULL THEN
+                -- 違反にはしない (CI は落とさない)。実際に通ったときだけ、毎回この 1 行を出す
+                RAISE WARNING 'check_rls_rows: 保留: table % — テナント A を設定した alc_api_rt から、B の tenant_id での INSERT が通る (policy % の WITH CHECK がテナントを縛らない)。例外として認めるかは未判断',
+                    t.tbl, t.pending_policy;
             END IF;
         ELSIF v_state IS NULL THEN
             INSERT INTO chk_rls_violations
@@ -464,6 +476,15 @@ BEGIN
       FROM chk_rls_exceptions e
      WHERE NOT EXISTS (SELECT 1 FROM chk_rls_rows r WHERE r.tbl = e.tbl);
 
+    INSERT INTO chk_rls_violations
+    SELECT 'exception', 'table ' || e.tbl,
+           format('書きの保留が指す INSERT のポリシー %s が無い (保留が古い)', e.pending_policy)
+      FROM chk_rls_exceptions e
+     WHERE e.pending_policy IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM pg_policies p
+                        WHERE p.schemaname = 'alc_api' AND p.tablename = e.tbl
+                          AND p.policyname = e.pending_policy AND p.cmd = 'INSERT');
+
     SELECT count(*) INTO v_tables
       FROM pg_class c
       JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped
@@ -492,16 +513,16 @@ BEGIN
     IF v_c <> v_tables - v_write_open THEN
         INSERT INTO chk_rls_violations
         VALUES ('count', 'schema alc_api',
-                format('行を入れて c を確かめた表が %s (tenant_id を持つ表 %s − 例外 %s = %s のはず)',
+                format('行を入れて c を確かめた表が %s (tenant_id を持つ表 %s − 例外と保留 %s = %s のはず)',
                        v_c, v_tables, v_write_open, v_tables - v_write_open));
     END IF;
 
-    RAISE NOTICE 'check_rls_rows: tenant_id を持つ表 % / 行を入れた表 % / a・b を確かめた表 % (例外 %) / c を確かめた表 % (例外 %) / 違反 % 行 / % 秒',
+    RAISE NOTICE 'check_rls_rows: tenant_id を持つ表 % / 行を入れた表 % / a・b を確かめた表 % (例外 %) / c を確かめた表 % (例外と保留 %) / 違反 % 行 / % 秒',
         v_tables, v_seeded, v_ab, v_read_open, v_c, v_write_open,
         (SELECT count(*) FROM chk_rls_violations),
         round(extract(epoch FROM clock_timestamp() - current_setting('chk.rls_t0')::TIMESTAMPTZ)::NUMERIC, 2);
-    -- 例外の内訳。RLS が無効の表は読み・書きの両方の例外に数えているので、分けて出す
-    RAISE NOTICE 'check_rls_rows: RLS 無効の例外: % / 読みの例外: % / 書きの例外: %',
+    -- 例外と保留の内訳。RLS が無効の表は a・b と c の両方から外しているので、分けて出す
+    RAISE NOTICE 'check_rls_rows: RLS 無効の例外: % / 読みの例外: % / 書きの保留: %',
         (SELECT format('%s 表 (%s)', count(*), string_agg(e.tbl, ' ' ORDER BY e.tbl))
            FROM chk_rls_exceptions e JOIN chk_rls_rows r ON r.tbl = e.tbl JOIN pg_class c ON c.oid = r.tbl_oid
           WHERE NOT c.relrowsecurity),
@@ -510,7 +531,7 @@ BEGIN
           WHERE c.relrowsecurity AND e.read_open),
         (SELECT format('%s 表 (%s)', count(*), string_agg(e.tbl, ' ' ORDER BY e.tbl))
            FROM chk_rls_exceptions e JOIN chk_rls_rows r ON r.tbl = e.tbl JOIN pg_class c ON c.oid = r.tbl_oid
-          WHERE c.relrowsecurity AND e.write_open);
+          WHERE e.pending_policy IS NOT NULL);
     RAISE NOTICE 'check_rls_rows: a・b・c の全部を行で確かめた表: %', v_names;
 END
 $$;

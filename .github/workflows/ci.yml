@@ -287,19 +287,26 @@ jobs:
       # カタログから全部引き (表を列挙しない)、テナント 2 つの行を入れて、a. 未設定では読めない /
       # b. 別のテナントの行が見えず自分の行は見える / c. 別のテナントの tenant_id での INSERT が 42501、を確かめる。
       # 違反を 1 行ずつ返す (0 行なら合格。行を入れられない表も違反)。数の内訳は NOTICE (stderr) に出る。
-      # 1 transaction で流して ROLLBACK するので、DB には何も残らない。ON_ERROR_STOP を外さない
+      # 1 transaction で流して ROLLBACK するので、DB には何も残らない。ON_ERROR_STOP を外さない。
+      # 合否は stdout だけで決める (stderr は別に取り、混ぜない)。「書きの保留」(未判断の 2 表) は違反ではなく
+      # stderr の WARNING「check_rls_rows: 保留: …」で出るので、それを注釈 (::warning) にする。落とさない
       - name: check RLS rows (tenant_id を持つ全部の表を、alc_api_rt から実際の行で)
         run: |
+          err=$(mktemp)
           got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
             -c 'BEGIN' \
             -f ci/check_rls_rows.sql \
-            -c 'ROLLBACK')
+            -c 'ROLLBACK' 2> "$err") || { cat "$err" >&2; exit 1; }
+          cat "$err" >&2
           if [ -n "$got" ]; then
             echo "行で確かめた RLS の違反:"
             echo "$got"
             exit 1
           fi
           echo "ok: 行で確かめた RLS (検査 a・b・c) の違反は 0 件"
+          { grep -o 'check_rls_rows: 保留: .*' "$err" || true; } | while IFS= read -r line; do
+            echo "::warning title=RLS の書きの保留::$line"
+          done
       # 陽性対照: 式が true ではないが、テナントを縛らないポリシーを足せば、違反の行が出ること。
       #   読み: vein_templates に SELECT の USING (tenant_id IS NOT NULL) → 検査 a・b の行が出る。
       #         同じ壊し方は check_rls_invariants.sql の検査 8 (式が true そのもの) では落ちない (空のまま) —

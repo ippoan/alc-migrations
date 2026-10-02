@@ -83,7 +83,7 @@ CI は同じファイルを実行用ロール (`SET ROLE alc_api_rt`) でも流�
 - 例外 (いま在るものを固定しているだけ。足さない)。例外の表が例外のとおりに振る舞わなくなったら、それも違反として出す
   - RLS が無効 (読みも書きも通る): `vehicle_settings_dumps` (`check_rls_invariants.sql` の検査 3 の許可リストと同じ)
   - 読み (全部のテナントの行が見える): `tenko_call_numbers`・`tenko_call_drivers`・`device_registration_requests` (SELECT が `USING (true)`。検査 8 の許可リストと同じ)
-  - 書き (別のテナントの `tenant_id` で INSERT できる): `device_registration_requests` (WITH CHECK が `status = 'pending'` だけ)・`access_requests` (WITH CHECK が `user_id = app.current_user_id` だけ)。式は `true` ではないが `tenant_id` を見ない。`check_rls_invariants.sql` の許可リストに対応するものは無い
+- 書きの保留 (2 表。例外として認めるか・ポリシーを直すかは未判断。Refs ippoan/rust-alc-api#727): `device_registration_requests` (INSERT の WITH CHECK が `status = 'pending'` だけ)・`access_requests` (INSERT の WITH CHECK が `user_id = app.current_user_id` だけ)。式は `true` ではないが `tenant_id` を見ないので、別のテナントの `tenant_id` で INSERT できる。`check_rls_invariants.sql` の許可リストに対応するものは無い。**CI は落とさず、通ったことを確かめたうえで毎回警告を出す** (psql の `WARNING` と、GitHub Actions の注釈)。通らなくなったら違反として出すので、そのとき保留から外す。足さない
 - 対象外: `tenant_id` 列を持たない表 (親の表を subquery で引くポリシーの 5 表と、`tenants`・`_sqlx_migrations`)。理由はファイルの冒頭
 
 CI は陽性対照として、`USING (tenant_id IS NOT NULL)` のポリシー (検査 8 では落ちない壊し方) を足すと違反の行が出ることも確かめる。

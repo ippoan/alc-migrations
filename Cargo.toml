@@ -1,6 +1,6 @@
 [package]
 name = "alc-migrations"
-version = "0.158.0"
+version = "0.159.0"
 edition = "2021"
 rust-version = "1.92"
 description = "ippoan alc-api の DB migration (sqlx) を埋め込んだ crate"

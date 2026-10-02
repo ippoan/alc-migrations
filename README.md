@@ -23,6 +23,9 @@ alc_migrations::MIGRATOR.run(&pool).await?;
 
 `alc_migrations::RLS_INVARIANTS_QUERY` は RLS の不変条件の検査 (`ci/check_rls_invariants.sql` そのもの。1 文の SELECT で、0 行なら合格)。何も変更しないので本番でも流せる。
 
+`alc_migrations::RLS_INVARIANT_CHECKS` はその検査の題の一覧 (`(検査の番号, 題)`。番号は検査 SQL の `check_no` と同じで、一致は tests が見る)。違反が 0 件のときも「どの検査を流したか」を返すために使う。
+`alc_migrations::RLS_STATE_QUERY` は RLS まわりのいまの状態 (`ci/rls_state.sql` そのもの。1 文の SELECT で、1 行 1 列の JSON `state`)。`alc_api` schema のカタログから、表ごとの RLS・FORCE・所有者・ポリシーの式・`alc_api_rt` の権限 (状態が同じ表は 1 組にまとめる)、view、`SECURITY DEFINER` の関数、sequence を返す。合否は決めない (合否は検査 SQL だけが決める)。表の行は読まず、何も変更しないので本番でも流せる。`ci/` のうち crate に入るのはこの 2 本だけ。
+
 バイナリ (`cli` feature):
 
 ```bash
@@ -61,6 +64,7 @@ CI の replay job は「migration を流すロール」の 2 つの軸で回る:
 (所有者の資格を取れる / 効くポリシーが無い / RLS 無しの表が増えた / 権限が付いていない)。
 この SQL は 1 文の SELECT (違反を 1 行ずつ返す。0 行なら合格) で、何も変更しないので本番でもそのまま流せる。
 CI は同じファイルを実行用ロール (`SET ROLE alc_api_rt`) でも流し、違反を作ったときに行が出ること (陽性対照) も確かめる。
+`ci/rls_state.sql` も流し、superuser と実行用ロールで出力が完全に同じこと・表の数の自己整合・状態を変えれば出力が変わること (陽性対照) を確かめる。
 
 ## License
 MIT

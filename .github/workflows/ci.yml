@@ -138,6 +138,50 @@ jobs:
           after=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT rolbypassrls FROM pg_roles WHERE rolname = 'alc_api_rt'")
           echo "rolbypassrls = $after"
           test "$after" = "f"
+      # RLS まわりのいまの状態 (1 文の SELECT。1 行 1 列の JSON)。backend も同じ 1 文を流す
+      # (alc_migrations::RLS_STATE_QUERY)。合否は決めない SQL なので、ここで確かめるのは形だけ:
+      #   * superuser で流しても実行用ロール (SET ROLE alc_api_rt) で流しても、出力が完全に同じ
+      #     (実行用ロールから policy の式・関数の設定まで読めている。並びが固定されている)
+      #   * 自己整合: 組の count の合計 = table_count = pg_class を直接数えた値 (> 0)
+      # 最後に、応答の大きさ (バイト数) と組の概要を出す
+      - name: RLS state (どのロールで流しても同じ出力・自己整合)
+        run: |
+          as_super=$(psql -v ON_ERROR_STOP=1 -q -At -f ci/rls_state.sql)
+          as_rt=$(psql -v ON_ERROR_STOP=1 -q -At \
+            -c 'SET ROLE alc_api_rt' \
+            -c "SELECT 'current_user = ' || current_user" \
+            -f ci/rls_state.sql)
+          test "$(printf '%s\n' "$as_super" | wc -l)" = "1"
+          test "$(printf '%s\n' "$as_rt" | head -n 1)" = "current_user = alc_api_rt"
+          test "$(printf '%s\n' "$as_rt" | tail -n +2)" = "$as_super"
+          direct=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT count(*) FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p')")
+          printf '%s\n' "$as_super" | jq -e --argjson direct "$direct" '
+            .table_count > 0
+            and .table_count == $direct
+            and ([.tables[].count] | add) == .table_count
+            and all(.tables[]; .count == (.names | length))'
+          printf '%s\n' "$as_super" | jq -c '{table_count, groups: (.tables | length), views: (.views | length), security_definer_functions: (.security_definer_functions | length), sequences}'
+          printf '%s\n' "$as_super" | jq -c '.tables[] | {count, rls_enabled, rls_forced, owner, runtime_role_can_act_as_owner, policies: (.policies | length), runtime_role_privileges, first: .names[0]}'
+          echo "ok: 2 つのロールで同じ出力 / table_count = $direct / $(printf '%s' "$as_super" | wc -c) bytes"
+      # 陽性対照: 状態を変えれば出力が変わること。RLS 有効・FORCE 無しの表を 1 つ選んで FORCE を付けると、
+      # その表が rls_forced: true の組に出る (付ける前は出ていない)。1 transaction で流して ROLLBACK
+      # するので、DB には何も残らない (残っていないことも確かめる)
+      - name: RLS state (陽性対照。FORCE を付けた表が rls_forced の組に出る)
+        run: |
+          tbl=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT relname FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p') AND relrowsecurity AND NOT relforcerowsecurity ORDER BY relname LIMIT 1")
+          echo "table = $tbl"
+          test -n "$tbl"
+          psql -v ON_ERROR_STOP=1 -q -At -f ci/rls_state.sql \
+            | jq -e --arg tbl "$tbl" 'any(.tables[]; .rls_forced and (.names | index($tbl) != null)) | not'
+          got=$(psql -v ON_ERROR_STOP=1 -q -At \
+            -c 'BEGIN' \
+            -c "ALTER TABLE alc_api.\"$tbl\" FORCE ROW LEVEL SECURITY" \
+            -f ci/rls_state.sql \
+            -c 'ROLLBACK')
+          printf '%s\n' "$got" | jq -e --arg tbl "$tbl" 'any(.tables[]; .rls_forced and (.names | index($tbl) != null))'
+          after=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT relforcerowsecurity FROM pg_class WHERE oid = 'alc_api.\"$tbl\"'::regclass")
+          echo "relforcerowsecurity = $after"
+          test "$after" = "f"
       # アプリのロール (その軸で所有者でないロール) で dev の軸 (153・155・156)・IT点呼 (154)・
       # 判定の確認の方法 (157) を確かめる。alc_api_app の軸では、所有者の接続だと dev の行が
       # 見えてしまうこと (いまの状態の記録) も確かめる。1 transaction で流して ROLLBACK するので

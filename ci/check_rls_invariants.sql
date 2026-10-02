@@ -1,6 +1,7 @@
 -- RLS が「書いただけ」で終わっていないことを確かめる不変条件の検査 (migration 158〜)。
 -- このファイルは 1 文の SELECT 1 本。crate に含まれ、backend が同じ 1 文を流す
--- (alc_migrations::RLS_INVARIANTS_QUERY)。ci/ のうち crate に入るのはこのファイルだけ。
+-- (alc_migrations::RLS_INVARIANTS_QUERY)。ci/ のうち crate に入るのはこのファイルと rls_state.sql だけ。
+-- 検査を足す・番号を変えるときは src/lib.rs の RLS_INVARIANT_CHECKS も直す (tests が一致を見る)。
 --
 -- backend は実行用ロール alc_api_rt で繋ぐ。ポリシーを書いても、次のどれかに当たると
 -- backend には効かない。違反を 1 行ずつ返す (check_no int, object text, detail text)。

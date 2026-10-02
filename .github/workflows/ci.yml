@@ -280,6 +280,63 @@ jobs:
       # 表への直接の問い合わせには RLS が掛かること、適用履歴は関数 (160) からだけ読めること
       - name: check runtime role (158・160)
         run: psql -v ON_ERROR_STOP=1 -f ci/check_runtime_role.sql
+      # テナント分離のポリシーが、実行用ロール alc_api_rt に対して実際の行を止めること。tenant_id を持つ表を
+      # カタログから全部引き (表を列挙しない)、テナント 2 つの行を入れて、a. 未設定では読めない /
+      # b. 別のテナントの行が見えず自分の行は見える / c. 別のテナントの tenant_id での INSERT が 42501、を確かめる。
+      # 違反を 1 行ずつ返す (0 行なら合格。行を入れられない表も違反)。数の内訳は NOTICE (stderr) に出る。
+      # 1 transaction で流して ROLLBACK するので、DB には何も残らない。ON_ERROR_STOP を外さない
+      - name: check RLS rows (tenant_id を持つ全部の表を、alc_api_rt から実際の行で)
+        run: |
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -f ci/check_rls_rows.sql \
+            -c 'ROLLBACK')
+          if [ -n "$got" ]; then
+            echo "行で確かめた RLS の違反:"
+            echo "$got"
+            exit 1
+          fi
+          echo "ok: 行で確かめた RLS (検査 a・b・c) の違反は 0 件"
+      # 陽性対照: 式が true ではないが、テナントを縛らないポリシーを足せば、違反の行が出ること。
+      #   読み: vein_templates に SELECT の USING (tenant_id IS NOT NULL) → 検査 a・b の行が出る。
+      #         同じ壊し方は check_rls_invariants.sql の検査 8 (式が true そのもの) では落ちない (空のまま) —
+      #         行で確かめる検査だけが捕まえる
+      #   書き: employees に INSERT の WITH CHECK (tenant_id IS NOT NULL) → 検査 c の行が出る
+      # 対照ごとに 1 transaction で流して ROLLBACK するので、DB には何も残らない
+      # (最後に、検査が 0 行に戻っていること・ポリシーと行が残っていないことも確かめる)
+      - name: check RLS rows (陽性対照。テナントを縛らないポリシーで検査 a・b・c の行が出る)
+        run: |
+          read_ctl='CREATE POLICY p727_ctl_read ON alc_api.vein_templates FOR SELECT USING (tenant_id IS NOT NULL)'
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c "$read_ctl" \
+            -f ci/check_rls_rows.sql \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -q '^a | table vein_templates | '
+          printf '%s\n' "$got" | grep -q '^b | table vein_templates | '
+          inv=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c "$read_ctl" \
+            -f ci/check_rls_invariants.sql \
+            -c 'ROLLBACK')
+          test -z "$inv"
+          echo "ok: 同じ壊し方で、check_rls_invariants.sql は 0 行のまま"
+
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c 'CREATE POLICY p727_ctl_write ON alc_api.employees FOR INSERT WITH CHECK (tenant_id IS NOT NULL)' \
+            -f ci/check_rls_rows.sql \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -q '^c | table employees | '
+
+          after=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' -c 'BEGIN' -f ci/check_rls_rows.sql -c 'ROLLBACK')
+          test -z "$after"
+          left=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT (SELECT count(*) FROM pg_policies WHERE schemaname = 'alc_api' AND policyname LIKE 'p727\_ctl\_%') + (SELECT count(*) FROM alc_api.tenants WHERE name LIKE 'ci check rls rows %')")
+          echo "left = $left"
+          test "$left" = "0"
+          echo "ok: ROLLBACK の後、違反は 0 件に戻っている (ポリシーも行も残っていない)"
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない
   safety:

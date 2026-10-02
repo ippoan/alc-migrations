@@ -33,4 +33,6 @@ migration を足したら `ci.yml` の件数の期待値 (`<件数> | <最大番
 `rls_state.sql` は合否を決めない (カタログの実物を JSON で返すだけ)。集約には必ず `ORDER BY` を付ける (CI が 2 つのロールの出力の一致を見る)。
 `ci/expected_rls_state.json` は期待する RLS の状態 (全 migration を 0 から当てた DB の `rls_state.sql` の出力から、各組の `owner` を除いたもの)。CI の 2 軸が「実物 = このファイル」を見る。手で編集しない。
 RLS の状態を変える migration (表・ポリシー・`SECURITY DEFINER` の関数・sequence・権限) を足したら、replay と同じ手順 (init → alc-migrate → grants) で DB を作って `ci/update_expected_rls_state.sh` を流し (`PG*` の環境変数で繋ぐ。引数なし)、JSON の差分を同じ PR に入れる。`rls_state.sql` を変えたときも同じ。
+`ci/check_rls_rows.sql` は、`tenant_id` 列を持つ全部の表を、実行用ロール (`SET LOCAL ROLE alc_api_rt`) から実際の行で確かめる (a. 未設定では読めない / b. 別のテナントの行が見えず自分の行は見える / c. 別のテナントの `tenant_id` での INSERT が 42501)。表はカタログから引く (列挙しない)。crate には入れない。自前の `BEGIN` / `ROLLBACK` を持たないので、`-c BEGIN -f ci/check_rls_rows.sql -c ROLLBACK` で包む。違反を行で返す (0 行なら合格)。
+表を足して「行を入れられない」の違反が出たら、そのときだけファイルの中の種に足す (複数の列にまたがる CHECK を持つ表。行を入れられない表を黙って飛ばさない)。例外のリスト (RLS 無効 1 表・読み 3 表) は、いま在るものを固定しているだけ。足さない。書きの保留 (2 表: `device_registration_requests`・`access_requests` の INSERT。未判断。Refs ippoan/rust-alc-api#727) は CI を落とさず警告を出す。これも足さない。`tenant_id` 列を持たない表は対象外 (理由はファイルの冒頭)。
 検査 7・8 の許可リスト (PUBLIC が呼べる `SECURITY DEFINER` の関数 / 式が `true` のポリシー) は、いま在るものを固定しているだけ。足さない (新しい関数は PUBLIC から `REVOKE` する。`USING (true)` を書かない)。

@@ -111,7 +111,7 @@ jobs:
             echo "$got"
             exit 1
           fi
-          echo "ok: RLS の不変条件 (検査 0〜5) の違反は 0 件"
+          echo "ok: RLS の不変条件 (検査 0〜8) の違反は 0 件"
       # 同じ 1 文を、backend が繋ぐ実行用ロールで流す (実行用ロールからカタログが読めることの確認)。
       # ログインではなく SET ROLE (postgres の軸では alc_api_rt が NOLOGIN)。出力の 1 行目で、
       # 実際に alc_api_rt として流れたことを確かめる。違反が在れば 2 行目以降に出て落ちる
@@ -138,6 +138,45 @@ jobs:
           after=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT rolbypassrls FROM pg_roles WHERE rolname = 'alc_api_rt'")
           echo "rolbypassrls = $after"
           test "$after" = "f"
+      # 陽性対照 (検査 6・7・8): 違反を作れば、その番号の行が出ること。検査ごとに 1 transaction で流して
+      # ROLLBACK するので、DB には何も残らない (最後に、検査が 0 行に戻っていることも確かめる)。
+      #   6: view を作る
+      #   7: 許可リストに無い SECURITY DEFINER の関数を PUBLIC に GRANT する / search_path の固定を外す
+      #   8: 式が true のポリシーを持たない RLS 有効の表に、USING (true) のポリシーを作る
+      - name: check RLS invariants (陽性対照。検査 6・7・8 の行が出る)
+        run: |
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c 'CREATE VIEW alc_api.ci_positive_control AS SELECT 1 AS one' \
+            -f ci/check_rls_invariants.sql \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -q '^6 | view ci_positive_control | '
+
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c 'GRANT EXECUTE ON FUNCTION alc_api.migration_status() TO PUBLIC' \
+            -c 'ALTER FUNCTION alc_api.migration_status() RESET search_path' \
+            -f ci/check_rls_invariants.sql \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -q '^7 | function migration_status() | .*PUBLIC が EXECUTE'
+          printf '%s\n' "$got" | grep -q '^7 | function migration_status() | .*search_path が固定されていない'
+
+          tbl=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT c.relname FROM pg_class c WHERE c.relnamespace = 'alc_api'::regnamespace AND c.relkind IN ('r', 'p') AND c.relrowsecurity AND NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname = 'alc_api' AND p.tablename = c.relname AND (p.qual = 'true' OR p.with_check = 'true')) ORDER BY c.relname LIMIT 1")
+          echo "table = $tbl"
+          test -n "$tbl"
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c "CREATE POLICY ci_positive_control ON alc_api.\"$tbl\" FOR SELECT USING (true)" \
+            -f ci/check_rls_invariants.sql \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -q "^8 | table $tbl | .*ci_positive_control (SELECT)"
+
+          after=$(psql -v ON_ERROR_STOP=1 -At -f ci/check_rls_invariants.sql)
+          test -z "$after"
+          echo "ok: ROLLBACK の後、違反は 0 件に戻っている"
       # RLS まわりのいまの状態 (1 文の SELECT。1 行 1 列の JSON)。backend も同じ 1 文を流す
       # (alc_migrations::RLS_STATE_QUERY)。合否は決めない SQL なので、ここで確かめるのは形だけ:
       #   * superuser で流しても実行用ロール (SET ROLE alc_api_rt) で流しても、出力が完全に同じ
@@ -182,6 +221,53 @@ jobs:
           after=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT relforcerowsecurity FROM pg_class WHERE oid = 'alc_api.\"$tbl\"'::regclass")
           echo "relforcerowsecurity = $after"
           test "$after" = "f"
+      # 実物 = 期待する状態 (ci/expected_rls_state.json。backend も同じファイルと本番の実物を比べる —
+      # alc_migrations::RLS_EXPECTED_STATE)。正規化の規則は 1 つ: jq -S 'del(.tables[].owner)'
+      # (所有者のロール名は軸で違うので外す。2 軸とも同じファイルと、読み替えなしで比べる)。
+      # RLS の状態を変える migration は、このファイルの差分として同じ PR に現れる。
+      # 最後に、作り直しの script が同じファイルを作ること (script と比較の規則がずれていない) も確かめる
+      - name: RLS state = ci/expected_rls_state.json
+        run: |
+          state=$(psql -v ON_ERROR_STOP=1 -q -At -f ci/rls_state.sql)
+          test -n "$state"
+          test "$(printf '%s\n' "$state" | wc -l)" = "1"
+          actual=$(printf '%s\n' "$state" | jq -S 'del(.tables[].owner)')
+          if ! printf '%s\n' "$actual" | diff -u ci/expected_rls_state.json -; then
+            echo "RLS の状態が ci/expected_rls_state.json と食い違っています (- 期待 / + 実物)。"
+            echo "意図した変更なら ci/update_expected_rls_state.sh で作り直し、差分を同じ PR に入れてください。"
+            exit 1
+          fi
+          bash ci/update_expected_rls_state.sh
+          git diff --exit-code -- ci/expected_rls_state.json
+          echo "ok: 実物 = 期待する状態 ($(wc -c < ci/expected_rls_state.json) bytes)"
+      # 陽性対照: 状態が履歴からずれれば (drift)、上の比較が食い違うこと。ポリシーを 1 本選んで DROP すると、
+      # policy_names からその名前が消え、期待する状態との diff が出る。1 transaction で流して ROLLBACK
+      # するので、DB には何も残らない (残っていないことも確かめる)
+      - name: RLS state (陽性対照。ポリシーを DROP すると期待する状態と食い違う)
+        run: |
+          pol=$(psql -v ON_ERROR_STOP=1 -At -F ' ' -c "SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'alc_api' ORDER BY tablename, policyname LIMIT 1")
+          tbl=${pol%% *}
+          name=${pol#* }
+          echo "table = $tbl / policy = $name"
+          test -n "$tbl"
+          test -n "$name"
+          jq -e --arg tbl "$tbl" --arg name "$name" '.policy_names[$tbl] | index($name) != null' ci/expected_rls_state.json
+          state=$(psql -v ON_ERROR_STOP=1 -q -At \
+            -c 'BEGIN' \
+            -c "DROP POLICY \"$name\" ON alc_api.\"$tbl\"" \
+            -f ci/rls_state.sql \
+            -c 'ROLLBACK')
+          test "$(printf '%s\n' "$state" | wc -l)" = "1"
+          actual=$(printf '%s\n' "$state" | jq -S 'del(.tables[].owner)')
+          printf '%s\n' "$actual" | jq -e --arg tbl "$tbl" --arg name "$name" '.policy_names[$tbl] | index($name) == null'
+          if printf '%s\n' "$actual" | diff -u ci/expected_rls_state.json - > /tmp/rls_state_drift.diff; then
+            echo "ポリシーを DROP したのに、期待する状態と食い違いません"
+            exit 1
+          fi
+          cat /tmp/rls_state_drift.diff
+          after=$(psql -v ON_ERROR_STOP=1 -q -At -f ci/rls_state.sql | jq -S 'del(.tables[].owner)')
+          printf '%s\n' "$after" | diff -u ci/expected_rls_state.json -
+          echo "ok: ROLLBACK の後、実物 = 期待する状態に戻っている"
       # アプリのロール (その軸で所有者でないロール) で dev の軸 (153・155・156)・IT点呼 (154)・
       # 判定の確認の方法 (157) を確かめる。alc_api_app の軸では、所有者の接続だと dev の行が
       # 見えてしまうこと (いまの状態の記録) も確かめる。1 transaction で流して ROLLBACK するので

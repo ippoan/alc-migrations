@@ -1,6 +1,7 @@
 -- RLS が「書いただけ」で終わっていないことを確かめる不変条件の検査 (migration 158〜)。
 -- このファイルは 1 文の SELECT 1 本。crate に含まれ、backend が同じ 1 文を流す
--- (alc_migrations::RLS_INVARIANTS_QUERY)。ci/ のうち crate に入るのはこのファイルと rls_state.sql だけ。
+-- (alc_migrations::RLS_INVARIANTS_QUERY)。ci/ のうち crate に入るのはこのファイルと rls_state.sql と
+-- expected_rls_state.json の 3 本だけ。
 -- 検査を足す・番号を変えるときは src/lib.rs の RLS_INVARIANT_CHECKS も直す (tests が一致を見る)。
 --
 -- backend は実行用ロール alc_api_rt で繋ぐ。ポリシーを書いても、次のどれかに当たると
@@ -21,12 +22,49 @@
 --   4. alc_api_rt が superuser でも BYPASSRLS でもない
 --   5. alc_api_rt が schema の USAGE、全表 (_sqlx_migrations を除く) の SELECT / INSERT / UPDATE / DELETE、
 --      全 sequence の USAGE、SECURITY DEFINER の全関数の EXECUTE を持つ
+--   6. alc_api schema に view / materialized view が無い
+--      (view は所有者の権限で表を読むので、RLS の迂回路になる。許可リストなし)
+--   7. SECURITY DEFINER の関数は、search_path が固定で (proconfig に search_path= が在る)、
+--      PUBLIC が EXECUTE できない。PUBLIC の側だけ、下の許可リストの関数を除く
+--      (search_path の側に許可リストは無い)
+--   8. RLS 有効の表に、USING か WITH CHECK の式が true そのものの permissive なポリシーが無い
+--      (全行を通す)。下の許可リストの (表, command) を除く
 --
 -- RLS を無効のままにしてよい表 (検査 3 の許可リスト)。足すときは、ここに理由を書く:
 --   * tenants                 — テナントの一覧そのもの。ログイン中 (テナント未確定) に slug / ドメインで引く
 --   * _sqlx_migrations        — sqlx の適用履歴。alc_api_rt には権限を付けない (migration 158)
 --   * vehicle_settings_dumps  — 車輛の設定の dump の索引 (migration 110)。RLS を有効にしないまま作られた。
 --                               有効にするのは別の migration で扱う (ここでは、いまの状態を固定するだけ)
+--
+-- PUBLIC が EXECUTE できてよい SECURITY DEFINER の関数 (検査 7 の許可リスト。関数の名前で 21 本)。
+-- migration 158 より前に作られ、PUBLIC の EXECUTE が残っている (PostgreSQL は新しい関数の EXECUTE を
+-- 既定で PUBLIC に付ける)。外す (REVOKE して必要なロールにだけ GRANT する) のは別の migration で扱う。
+-- ここに足さない — 新しい SECURITY DEFINER の関数は 158 の形 (PUBLIC から REVOKE) で作る。
+-- 括弧の中は、その関数が最初に出てくる migration:
+--   * archive_delete_dtako_date / archive_fetch_dtako_rows_json / archive_list_dtako_dates /
+--     archive_list_old_dtako_dates / archive_upsert_dtako_batch (084)
+--   * close_dtako_ticket_by_token (115)
+--   * find_recipient_by_line_user_id (076)
+--   * find_user_by_line_user_id (121)
+--   * get_device_settings_by_id / lookup_device_tenant (063)
+--   * get_trouble_schedule (088)
+--   * list_enabled_line_configs (117)
+--   * lookup_bot_config_for_webhook (102)
+--   * lookup_delivery_for_view (107)
+--   * lookup_line_config_by_channel (072)
+--   * lookup_lineworks_channel_for_send (129)
+--   * lookup_notify_recipient_for_send (130)
+--   * mark_delivery_read (071)
+--   * set_current_tenant (004)
+--   * verify_device_token (116)
+--   * resolve_sso_config — migration の履歴に無い (テスト用 DB では scripts/init_local_db.sql が作る)
+--
+-- 式が true のポリシーを持ってよい (表, command) (検査 8 の許可リスト)。理由は migration のコメントのまま。
+-- 式を絞るのは別の migration で扱う (ここでは、いまの状態を固定するだけ)。ここに足さない:
+--   * tenko_call_numbers / SELECT            — migration 032「マスタは認証前に参照するため SELECT は全行許可」
+--   * tenko_call_drivers / SELECT            — migration 032「phone_number 検索は set_config 前のため SELECT 許可」
+--   * device_registration_requests / SELECT  — migration 035「ポーリング用に SELECT は公開
+--                                              (registration_code でフィルタされる)」
 --
 -- カタログを読む SELECT 1 文だけで、何も変更しない。SET ROLE も使わないので、本番でもそのまま
 -- 流せる (どのロールで流しても同じ結果になる)。
@@ -110,6 +148,62 @@ WITH rt AS (
      WHERE f.pronamespace = 'alc_api'::regnamespace
        AND f.prosecdef
        AND NOT has_function_privilege(rt.oid, f.oid, 'EXECUTE')
+
+    UNION ALL
+    SELECT 6, 'view ' || c.relname,
+           format('alc_api schema に %s が在る (所有者の権限で表を読むので、RLS の迂回路になる)',
+                  CASE c.relkind WHEN 'm' THEN 'materialized view' ELSE 'view' END)
+      FROM pg_class c
+     WHERE c.relnamespace = 'alc_api'::regnamespace
+       AND c.relkind IN ('v', 'm')
+
+    UNION ALL
+    SELECT 7, 'function ' || f.oid::regprocedure,
+           'SECURITY DEFINER なのに search_path が固定されていない (proconfig に search_path= が無い)'
+      FROM pg_proc f
+     WHERE f.pronamespace = 'alc_api'::regnamespace
+       AND f.prosecdef
+       AND NOT EXISTS (
+           SELECT 1
+             FROM unnest(f.proconfig) AS cfg(item)
+            WHERE cfg.item LIKE 'search_path=%'
+       )
+
+    UNION ALL
+    SELECT 7, 'function ' || f.oid::regprocedure,
+           'SECURITY DEFINER の関数を PUBLIC が EXECUTE でき、許可リストにも無い'
+      FROM pg_proc f
+     WHERE f.pronamespace = 'alc_api'::regnamespace
+       AND f.prosecdef
+       AND has_function_privilege('public', f.oid, 'EXECUTE')
+       AND f.proname NOT IN (
+           'archive_delete_dtako_date', 'archive_fetch_dtako_rows_json', 'archive_list_dtako_dates',
+           'archive_list_old_dtako_dates', 'archive_upsert_dtako_batch', 'close_dtako_ticket_by_token',
+           'find_recipient_by_line_user_id', 'find_user_by_line_user_id', 'get_device_settings_by_id',
+           'get_trouble_schedule', 'list_enabled_line_configs', 'lookup_bot_config_for_webhook',
+           'lookup_delivery_for_view', 'lookup_device_tenant', 'lookup_line_config_by_channel',
+           'lookup_lineworks_channel_for_send', 'lookup_notify_recipient_for_send', 'mark_delivery_read',
+           'resolve_sso_config', 'set_current_tenant', 'verify_device_token')
+
+    UNION ALL
+    SELECT 8, 'table ' || t.relname,
+           format('ポリシー %s (%s) の %s の式が true (全行を通す) で、許可リストにも無い',
+                  p.policyname, p.cmd,
+                  CASE WHEN p.qual = 'true' AND p.with_check = 'true' THEN 'USING と WITH CHECK'
+                       WHEN p.qual = 'true' THEN 'USING'
+                       ELSE 'WITH CHECK'
+                  END)
+      FROM tbl t
+      JOIN pg_policies p
+        ON p.schemaname = 'alc_api'
+       AND p.tablename = t.relname
+     WHERE t.relrowsecurity
+       AND p.permissive = 'PERMISSIVE'
+       AND (p.qual = 'true' OR p.with_check = 'true')
+       AND (t.relname::text, p.cmd) NOT IN (
+           ('tenko_call_numbers', 'SELECT'),
+           ('tenko_call_drivers', 'SELECT'),
+           ('device_registration_requests', 'SELECT'))
 )
 SELECT v.check_no, v.object, v.detail
   FROM violation v

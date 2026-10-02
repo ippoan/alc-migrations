@@ -21,6 +21,8 @@ alc_migrations::MIGRATOR.run(&pool).await?;
 
 テスト用 DB 向けに `alc_migrations::INIT_LOCAL_DB` / `LOCAL_APP_GRANTS` (init / grants の SQL) も公開している。本番では使わない。
 
+`alc_migrations::RLS_INVARIANTS_QUERY` は RLS の不変条件の検査 (`ci/check_rls_invariants.sql` そのもの。1 文の SELECT で、0 行なら合格)。何も変更しないので本番でも流せる。
+
 バイナリ (`cli` feature):
 
 ```bash
@@ -57,7 +59,8 @@ CI の replay job は「migration を流すロール」の 2 つの軸で回る:
 
 どちらの軸でも `ci/check_rls_invariants.sql` を流し、「ポリシーを書いたが backend に効いていない」を落とす
 (所有者の資格を取れる / 効くポリシーが無い / RLS 無しの表が増えた / 権限が付いていない)。
-この SQL は何も変更しないので、本番でもそのまま流せる。1 文で結果が返る版 (0 行なら合格) はファイルの末尾に在る。
+この SQL は 1 文の SELECT (違反を 1 行ずつ返す。0 行なら合格) で、何も変更しないので本番でもそのまま流せる。
+CI は同じファイルを実行用ロール (`SET ROLE alc_api_rt`) でも流し、違反を作ったときに行が出ること (陽性対照) も確かめる。
 
 ## License
 MIT

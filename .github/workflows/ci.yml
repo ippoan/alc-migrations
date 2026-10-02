@@ -93,23 +93,51 @@ jobs:
             got=$(psql -At -F ' | ' -c "SELECT count(*), max(version) FROM alc_api._sqlx_migrations")
           fi
           echo "$got"
-          test "$got" = "158 | 159"
+          test "$got" = "159 | 160"
       - name: table owner
         run: |
           got=$(psql -At -c "SELECT DISTINCT relowner::regrole FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p')")
           echo "$got"
           test "$got" = "${{ matrix.migrate_as }}"
-      # ポリシーを書いたが backend (alc_api_rt) に効いていない、を落とす。何も変更しない
+      # ポリシーを書いたが backend (alc_api_rt) に効いていない、を落とす。何も変更しない。
+      # 1 文の SELECT で、違反を 1 行ずつ返す (0 行なら合格)。backend も同じ 1 文を流す
+      # (alc_migrations::RLS_INVARIANTS_QUERY)。ON_ERROR_STOP を外さない — 無いと SQL のエラー
+      # (権限・構文) でも出力が空になり、合格に見える
       - name: check RLS invariants
-        run: psql -v ON_ERROR_STOP=1 -f ci/check_rls_invariants.sql
-      # 本番の SQL エディタで流す「1 文で結果が返る版」(ファイル末尾のコメント) も同じ結果になること
-      - name: check RLS invariants (1 文の版が 0 行)
         run: |
-          sql=$(grep '^--|' ci/check_rls_invariants.sql | sed 's/^--| \{0,1\}//')
-          test -n "$sql"
-          got=$(printf '%s\n' "$sql" | psql -At -v ON_ERROR_STOP=1)
+          got=$(psql -v ON_ERROR_STOP=1 -At -f ci/check_rls_invariants.sql)
+          if [ -n "$got" ]; then
+            echo "RLS の不変条件の違反:"
+            echo "$got"
+            exit 1
+          fi
+          echo "ok: RLS の不変条件 (検査 0〜5) の違反は 0 件"
+      # 同じ 1 文を、backend が繋ぐ実行用ロールで流す (実行用ロールからカタログが読めることの確認)。
+      # ログインではなく SET ROLE (postgres の軸では alc_api_rt が NOLOGIN)。出力の 1 行目で、
+      # 実際に alc_api_rt として流れたことを確かめる。違反が在れば 2 行目以降に出て落ちる
+      - name: check RLS invariants as alc_api_rt (SET ROLE)
+        run: |
+          got=$(psql -v ON_ERROR_STOP=1 -q -At \
+            -c 'SET ROLE alc_api_rt' \
+            -c "SELECT 'current_user = ' || current_user" \
+            -f ci/check_rls_invariants.sql)
           echo "$got"
-          test -z "$got"
+          test "$got" = "current_user = alc_api_rt"
+      # 陽性対照: 違反を作れば行が出ること。alc_api_rt を BYPASSRLS にすると検査 4 が 1 行返す。
+      # 1 transaction で流して ROLLBACK するので、DB には何も残らない (残っていないことも確かめる)。
+      # ロールの属性を変えるので、APP_ROLE ではなく既定の postgres で流す
+      - name: check RLS invariants (陽性対照。BYPASSRLS で検査 4 の行が出る)
+        run: |
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c 'ALTER ROLE alc_api_rt BYPASSRLS' \
+            -f ci/check_rls_invariants.sql \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -q '^4 | role alc_api_rt | '
+          after=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT rolbypassrls FROM pg_roles WHERE rolname = 'alc_api_rt'")
+          echo "rolbypassrls = $after"
+          test "$after" = "f"
       # アプリのロール (その軸で所有者でないロール) で dev の軸 (153・155・156)・IT点呼 (154)・
       # 判定の確認の方法 (157) を確かめる。alc_api_app の軸では、所有者の接続だと dev の行が
       # 見えてしまうこと (いまの状態の記録) も確かめる。1 transaction で流して ROLLBACK するので
@@ -119,8 +147,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -v app_role="$APP_ROLE" ${OWNER_ROLE:+-v owner_role="$OWNER_ROLE"} \
             -f ci/check_dev_axis_and_it_tenko.sql
       # 実行用ロール alc_api_rt で、認証前・テナント横断の関数 (158) を tenant context 無しで呼べること、
-      # 表への直接の問い合わせには RLS が掛かること
-      - name: check runtime role (158)
+      # 表への直接の問い合わせには RLS が掛かること、適用履歴は関数 (160) からだけ読めること
+      - name: check runtime role (158・160)
         run: psql -v ON_ERROR_STOP=1 -f ci/check_runtime_role.sql
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない

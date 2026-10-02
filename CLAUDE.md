@@ -27,3 +27,5 @@ tag は打たない。crates.io には出さない (`publish = false`)。
 DB を使う確認は CI の `replay` job (init → alc-migrate → grants → `_sqlx_migrations` の件数 → `ci/*.sql` の検査)。
 migration を足したら `ci.yml` の件数の期待値 (`<件数> | <最大番号>`。133 が欠番なので件数 = 最大番号 − 1) も更新する。
 検査用の SQL は `ci/` に置く (`scripts/*.sql` は crate に含まれるので置かない)。
+`ci/` のうち crate に入るのは `check_rls_invariants.sql` だけ (backend が同じ 1 文を流すため。`alc_migrations::RLS_INVARIANTS_QUERY`)。ほかの検査 SQL は今までどおり入れない。
+`check_rls_invariants.sql` は 1 文の SELECT のまま保つ (文を足さない・psql のメタコマンドを使わない)。

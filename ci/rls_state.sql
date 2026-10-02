@@ -15,8 +15,10 @@
 --     owner                     — 表の所有者
 --     runtime_role_can_act_as_owner — alc_api_rt が所有者の資格を取れるか (検査 1 と同じ判定)
 --     policies                  — ポリシーの配列 (command / permissive / roles / using / with_check)。
---                                 名前は入れない (表ごとに違うので、入れると組にまとまらない)
+--                                 名前は入れない (表ごとに違うので、入れると組にまとまらない)。名前は policy_names で返す
 --     runtime_role_privileges   — alc_api_rt が持つ SELECT / INSERT / UPDATE / DELETE
+--   policy_names                — 表ごとのポリシーの名前 (key = 表の名前、value = 名前の配列。昇順)。
+--                                 tables と同じ表が全部 key に在り、ポリシーの無い表は []
 --   views                       — view / materialized view の名前
 --   security_definer_functions  — SECURITY DEFINER の関数 (signature / search_path /
 --                                 runtime_role_can_execute / public_can_execute)
@@ -74,6 +76,15 @@ WITH rt AS (
            ), '[]'::jsonb) END AS runtime_role_privileges
       FROM tbl t
       LEFT JOIN rt ON true
+), pol_names AS (
+    SELECT t.name,
+           COALESCE((
+               SELECT jsonb_agg(p.policyname::text ORDER BY p.policyname::text COLLATE "C")
+                 FROM pg_policies p
+                WHERE p.schemaname = 'alc_api'
+                  AND p.tablename = t.name
+           ), '[]'::jsonb) AS names
+      FROM tbl t
 ), grp AS (
     SELECT s.rls_enabled, s.rls_forced, s.owner, s.runtime_role_can_act_as_owner,
            s.policies, s.runtime_role_privileges,
@@ -100,6 +111,10 @@ SELECT jsonb_build_object(
                    ORDER BY g.table_count DESC, g.first_name COLLATE "C")
           FROM grp g
     ), '[]'::jsonb),
+    'policy_names', COALESCE((
+        SELECT jsonb_object_agg(n.name, n.names ORDER BY n.name COLLATE "C")
+          FROM pol_names n
+    ), '{}'::jsonb),
     'views', COALESCE((
         SELECT jsonb_agg(c.relname::text ORDER BY c.relname::text COLLATE "C")
           FROM pg_class c

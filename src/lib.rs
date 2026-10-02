@@ -31,7 +31,20 @@ pub const RLS_INVARIANT_CHECKS: &[(i32, &str)] = &[
         5,
         "alc_api_rt が schema の USAGE、全表 (_sqlx_migrations を除く) の SELECT / INSERT / UPDATE / DELETE、全 sequence の USAGE、SECURITY DEFINER の全関数の EXECUTE を持つ",
     ),
+    (6, "alc_api schema に view / materialized view が無い"),
+    (
+        7,
+        "SECURITY DEFINER の関数は search_path が固定で、PUBLIC が EXECUTE できない (許可リストの関数を除く)",
+    ),
+    (
+        8,
+        "RLS 有効の表に、式が true の permissive なポリシーが無い (許可リストの表を除く)",
+    ),
 ];
 
 /// RLS まわりのいまの状態 (1 文の SELECT。`alc_api` schema のカタログを読み、1 行 1 列の JSON `state` を返す)。合否は決めない。何も変更しないので本番でも流せる。
 pub const RLS_STATE_QUERY: &str = include_str!("../ci/rls_state.sql");
+
+/// 期待する RLS の状態 (JSON)。全 migration を空の DB に 0 から当て、[`RLS_STATE_QUERY`] を流した出力から、各組の `owner` を除いた形
+/// (所有者のロール名は環境で違うため)。比べる側も `owner` を落としてから比べる。作り直すのは `ci/update_expected_rls_state.sh`。
+pub const RLS_EXPECTED_STATE: &str = include_str!("../ci/expected_rls_state.json");

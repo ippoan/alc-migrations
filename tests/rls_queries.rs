@@ -1,4 +1,6 @@
-use alc_migrations::{RLS_INVARIANTS_QUERY, RLS_INVARIANT_CHECKS, RLS_STATE_QUERY};
+use alc_migrations::{
+    RLS_EXPECTED_STATE, RLS_INVARIANTS_QUERY, RLS_INVARIANT_CHECKS, RLS_STATE_QUERY,
+};
 use std::collections::BTreeSet;
 
 /// 検査 SQL の `violation` CTE の各枝の先頭 (`SELECT <番号>, '`) から番号を取る。
@@ -24,12 +26,13 @@ fn sql_body(sql: &str) -> String {
 #[test]
 fn invariant_checks_match_the_branches_of_the_query() {
     let branches = check_numbers_in_query();
-    // 現行は 9 本の枝 (検査 5 が 4 本)。枝を足したら、ここと RLS_INVARIANT_CHECKS を見直す。
-    assert_eq!(branches.len(), 9, "violation CTE の枝の数: {branches:?}");
+    // 現行は 13 本の枝 (検査 5 が 4 本、検査 7 が 2 本)。枝を足したら、ここと RLS_INVARIANT_CHECKS を見直す。
+    assert_eq!(branches.len(), 13, "violation CTE の枝の数: {branches:?}");
 
     let in_query: BTreeSet<i32> = branches.into_iter().collect();
     let in_list: BTreeSet<i32> = RLS_INVARIANT_CHECKS.iter().map(|(no, _)| *no).collect();
     assert_eq!(in_query, in_list);
+    assert_eq!(in_list, (0..=8).collect::<BTreeSet<i32>>());
 }
 
 #[test]
@@ -82,4 +85,23 @@ fn state_query_orders_every_aggregate() {
             &rest[..end.min(80)]
         );
     }
+}
+
+/// 期待する状態は `jq -S` で整形した JSON の object (依存を足さないので、形は文字列で見る)。
+/// 最上位に policy_names / tables / table_count が在り、環境で違う `owner` は入っていない。
+#[test]
+fn expected_state_is_normalized_json_without_owner() {
+    assert!(RLS_EXPECTED_STATE.starts_with("{\n"));
+    assert!(RLS_EXPECTED_STATE.ends_with("\n}\n"));
+    // 字下げ 2 の行 = 最上位の key
+    let top_level: Vec<&str> = RLS_EXPECTED_STATE
+        .lines()
+        .filter(|line| line.starts_with("  \""))
+        .filter_map(|line| line[3..].split_once("\": ").map(|(key, _)| key))
+        .collect();
+    for key in ["policy_names", "table_count", "tables"] {
+        assert!(top_level.contains(&key), "{key}: {top_level:?}");
+    }
+    assert!(top_level.windows(2).all(|w| w[0] < w[1]), "{top_level:?}");
+    assert!(!RLS_EXPECTED_STATE.contains("\"owner\""));
 }

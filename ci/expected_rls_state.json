@@ -1,0 +1,1255 @@
+{
+  "policy_names": {
+    "_sqlx_migrations": [],
+    "access_requests": [
+      "access_requests_insert",
+      "access_requests_select",
+      "access_requests_update"
+    ],
+    "api_tokens": [
+      "tenant_isolation"
+    ],
+    "bot_configs": [
+      "tenant_isolation"
+    ],
+    "camera_health_logs": [
+      "tenant_isolation"
+    ],
+    "cameras": [
+      "tenant_isolation"
+    ],
+    "car_inspection": [
+      "tenant_isolation"
+    ],
+    "car_inspection_deregistration": [
+      "tenant_isolation"
+    ],
+    "car_inspection_deregistration_files": [
+      "tenant_isolation"
+    ],
+    "car_inspection_files": [
+      "tenant_isolation"
+    ],
+    "car_inspection_files_a": [
+      "tenant_isolation"
+    ],
+    "car_inspection_files_b": [
+      "tenant_isolation"
+    ],
+    "car_inspection_nfc_tags": [
+      "tenant_isolation"
+    ],
+    "carrying_item_vehicle_conditions": [
+      "civc_tenant"
+    ],
+    "carrying_items": [
+      "carrying_items_tenant"
+    ],
+    "communication_items": [
+      "communication_items_tenant"
+    ],
+    "device_registration_requests": [
+      "device_reg_delete",
+      "device_reg_insert",
+      "device_reg_select",
+      "device_reg_update"
+    ],
+    "devices": [
+      "tenant_isolation_devices"
+    ],
+    "dtako_daily_work_hours": [
+      "dtako_dwh_tenant"
+    ],
+    "dtako_daily_work_segments": [
+      "dtako_dws_tenant"
+    ],
+    "dtako_event_classifications": [
+      "dtako_event_cls_tenant"
+    ],
+    "dtako_offices": [
+      "dtako_offices_tenant"
+    ],
+    "dtako_operation_changes": [
+      "dtako_operation_changes_tenant"
+    ],
+    "dtako_operations": [
+      "dtako_ops_tenant"
+    ],
+    "dtako_scrape_history": [
+      "dtako_scrape_history_tenant"
+    ],
+    "dtako_tickets": [
+      "dtako_tickets_tenant"
+    ],
+    "dtako_upload_history": [
+      "dtako_upload_tenant"
+    ],
+    "dtako_vehicles": [
+      "dtako_vehicles_tenant"
+    ],
+    "dtakologs": [
+      "archive_delete",
+      "archive_insert",
+      "archive_select",
+      "archive_update",
+      "tenant_isolation"
+    ],
+    "dvr_notifications": [
+      "dvr_notifications_tenant"
+    ],
+    "employee_health_baselines": [
+      "tenant_isolation_health_baselines"
+    ],
+    "employees": [
+      "tenant_isolation_employees"
+    ],
+    "equipment_failures": [
+      "tenant_isolation_equipment_failures"
+    ],
+    "file_access_logs": [
+      "tenant_isolation"
+    ],
+    "files": [
+      "tenant_isolation"
+    ],
+    "files_append": [
+      "tenant_isolation"
+    ],
+    "guidance_record_attachments": [
+      "gra_tenant"
+    ],
+    "guidance_records": [
+      "guidance_records_tenant"
+    ],
+    "hub_measurements": [
+      "hub_measurements_tenant"
+    ],
+    "item_files": [
+      "tenant_isolation_item_files"
+    ],
+    "items": [
+      "tenant_isolation_items"
+    ],
+    "lineworks_channels": [
+      "tenant_isolation"
+    ],
+    "maintenance_categories": [
+      "tenant_isolation"
+    ],
+    "maintenance_files": [
+      "tenant_isolation"
+    ],
+    "maintenance_records": [
+      "tenant_isolation"
+    ],
+    "maintenance_vehicles": [
+      "tenant_isolation"
+    ],
+    "measurements": [
+      "tenant_isolation_measurements"
+    ],
+    "notify_deliveries": [
+      "notify_deliveries_insert",
+      "notify_deliveries_select",
+      "notify_deliveries_update"
+    ],
+    "notify_documents": [
+      "notify_documents_delete",
+      "notify_documents_insert",
+      "notify_documents_select",
+      "notify_documents_update"
+    ],
+    "notify_groups": [
+      "notify_groups_delete",
+      "notify_groups_insert",
+      "notify_groups_select",
+      "notify_groups_update"
+    ],
+    "notify_line_configs": [
+      "notify_line_configs_delete",
+      "notify_line_configs_insert",
+      "notify_line_configs_select",
+      "notify_line_configs_update"
+    ],
+    "notify_recipient_groups": [
+      "notify_recipient_groups_delete",
+      "notify_recipient_groups_insert",
+      "notify_recipient_groups_select"
+    ],
+    "notify_recipients": [
+      "notify_recipients_delete",
+      "notify_recipients_insert",
+      "notify_recipients_select",
+      "notify_recipients_update"
+    ],
+    "pending_car_inspection_pdfs": [
+      "tenant_isolation"
+    ],
+    "sso_provider_configs": [
+      "tenant_isolation"
+    ],
+    "tenant_allowed_emails": [
+      "tenant_isolation"
+    ],
+    "tenants": [],
+    "tenko_call_drivers": [
+      "tenko_call_drivers_delete",
+      "tenko_call_drivers_insert",
+      "tenko_call_drivers_read",
+      "tenko_call_drivers_update"
+    ],
+    "tenko_call_logs": [
+      "tenko_call_logs_insert",
+      "tenko_call_logs_read"
+    ],
+    "tenko_call_numbers": [
+      "tenko_call_numbers_delete",
+      "tenko_call_numbers_read",
+      "tenko_call_numbers_update",
+      "tenko_call_numbers_write"
+    ],
+    "tenko_carrying_item_checks": [
+      "carrying_item_checks_tenant"
+    ],
+    "tenko_records": [
+      "tenant_isolation_tenko_records"
+    ],
+    "tenko_schedules": [
+      "tenant_isolation_tenko_schedules"
+    ],
+    "tenko_sessions": [
+      "tenant_isolation_tenko_sessions"
+    ],
+    "timecard_cards": [
+      "tenant_isolation_timecard_cards"
+    ],
+    "trouble_categories": [
+      "tenant_isolation"
+    ],
+    "trouble_custom_field_defs": [
+      "tenant_isolation"
+    ],
+    "trouble_field_layouts": [
+      "tenant_isolation"
+    ],
+    "trouble_files": [
+      "tenant_isolation"
+    ],
+    "trouble_notification_prefs": [
+      "tenant_isolation"
+    ],
+    "trouble_offices": [
+      "tenant_isolation"
+    ],
+    "trouble_progress_statuses": [
+      "tenant_isolation"
+    ],
+    "trouble_schedules": [
+      "tenant_isolation"
+    ],
+    "trouble_status_history": [
+      "tenant_isolation"
+    ],
+    "trouble_task_statuses": [
+      "tenant_isolation"
+    ],
+    "trouble_task_types": [
+      "tenant_isolation"
+    ],
+    "trouble_tasks": [
+      "tenant_isolation"
+    ],
+    "trouble_tickets": [
+      "tenant_isolation"
+    ],
+    "trouble_workflow_states": [
+      "tenant_isolation"
+    ],
+    "trouble_workflow_transitions": [
+      "tenant_isolation"
+    ],
+    "users": [
+      "tenant_isolation_users"
+    ],
+    "vehicle_settings_dumps": [],
+    "vein_templates": [
+      "tenant_isolation_vein_templates"
+    ],
+    "webhook_configs": [
+      "tenant_isolation_webhook_configs"
+    ],
+    "webhook_deliveries": [
+      "tenant_isolation_webhook_deliveries"
+    ]
+  },
+  "security_definer_functions": [
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "archive_delete_dtako_date(text,text)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "archive_fetch_dtako_rows_json(text,text,bigint,bigint)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "archive_list_dtako_dates()"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "archive_list_old_dtako_dates(text)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "archive_upsert_dtako_batch(jsonb)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "close_dtako_ticket_by_token(text,text)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "create_access_request(uuid,uuid)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "find_invitation_by_email(text)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "find_recipient_by_line_user_id(text)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "find_user_by_google_sub(text)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "find_user_by_line_user_id(text)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "find_user_by_lineworks_id(text)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "get_device_re_pair_state(uuid)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "get_device_settings_by_id(uuid)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "get_trouble_schedule(uuid)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "list_all_callable_devices()"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "list_dev_device_tenant_ids()"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "list_enabled_line_configs()"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "list_fcm_devices()"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "list_tenko_overdue_webhook_configs()"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "lookup_bot_config_for_webhook(text)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "lookup_delivery_for_view(uuid)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "lookup_device_tenant(uuid)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "lookup_line_config_by_channel(text)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "lookup_lineworks_channel_for_send(uuid)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "lookup_notify_recipient_for_send(uuid)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "mark_delivery_read(uuid)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "migration_status()"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "resolve_sso_config(text,text)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "save_user_refresh_token(uuid,text,timestamp with time zone)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "set_current_tenant(text)"
+    },
+    {
+      "public_can_execute": true,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "verify_device_token(uuid,uuid)"
+    }
+  ],
+  "sequences": {
+    "count": 12,
+    "runtime_role_usage_missing": []
+  },
+  "table_count": 85,
+  "tables": [
+    {
+      "count": 24,
+      "names": [
+        "api_tokens",
+        "camera_health_logs",
+        "cameras",
+        "item_files",
+        "items",
+        "maintenance_categories",
+        "maintenance_files",
+        "maintenance_records",
+        "maintenance_vehicles",
+        "trouble_categories",
+        "trouble_custom_field_defs",
+        "trouble_field_layouts",
+        "trouble_files",
+        "trouble_notification_prefs",
+        "trouble_offices",
+        "trouble_progress_statuses",
+        "trouble_schedules",
+        "trouble_status_history",
+        "trouble_task_statuses",
+        "trouble_task_types",
+        "trouble_tasks",
+        "trouble_tickets",
+        "trouble_workflow_states",
+        "trouble_workflow_transitions"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 19,
+      "names": [
+        "carrying_items",
+        "communication_items",
+        "devices",
+        "dtako_daily_work_hours",
+        "dtako_daily_work_segments",
+        "dtako_event_classifications",
+        "dtako_offices",
+        "dtako_operation_changes",
+        "dtako_operations",
+        "dtako_scrape_history",
+        "dtako_upload_history",
+        "dtako_vehicles",
+        "employee_health_baselines",
+        "employees",
+        "guidance_records",
+        "timecard_cards",
+        "users",
+        "vein_templates",
+        "webhook_configs"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 14,
+      "names": [
+        "bot_configs",
+        "car_inspection",
+        "car_inspection_deregistration",
+        "car_inspection_deregistration_files",
+        "car_inspection_files",
+        "car_inspection_files_a",
+        "car_inspection_files_b",
+        "car_inspection_nfc_tags",
+        "file_access_logs",
+        "files",
+        "files_append",
+        "lineworks_channels",
+        "pending_car_inspection_pdfs",
+        "sso_provider_configs"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = COALESCE((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid, (NULLIF(current_setting('app.current_organization_id'::text, true), ''::text))::uuid))",
+          "with_check": "(tenant_id = COALESCE((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid, (NULLIF(current_setting('app.current_organization_id'::text, true), ''::text))::uuid))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 7,
+      "names": [
+        "equipment_failures",
+        "hub_measurements",
+        "measurements",
+        "tenko_records",
+        "tenko_schedules",
+        "tenko_sessions",
+        "webhook_deliveries"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "((tenant_id = (current_setting('app.current_tenant_id'::text))::uuid) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))",
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text))::uuid) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 3,
+      "names": [
+        "notify_documents",
+        "notify_line_configs",
+        "notify_recipients"
+      ],
+      "policies": [
+        {
+          "command": "DELETE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": null
+        },
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": null
+        },
+        {
+          "command": "UPDATE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 2,
+      "names": [
+        "dtako_tickets",
+        "dvr_notifications"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
+          "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 2,
+      "names": [
+        "tenants",
+        "vehicle_settings_dumps"
+      ],
+      "policies": [],
+      "rls_enabled": false,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 2,
+      "names": [
+        "tenko_call_drivers",
+        "tenko_call_numbers"
+      ],
+      "policies": [
+        {
+          "command": "DELETE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = current_setting('app.current_tenant_id'::text, true))",
+          "with_check": null
+        },
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(tenant_id = current_setting('app.current_tenant_id'::text, true))"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "true",
+          "with_check": null
+        },
+        {
+          "command": "UPDATE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = current_setting('app.current_tenant_id'::text, true))",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "_sqlx_migrations"
+      ],
+      "policies": [],
+      "rls_enabled": false,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": []
+    },
+    {
+      "count": 1,
+      "names": [
+        "access_requests"
+      ],
+      "policies": [
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(user_id = (current_setting('app.current_user_id'::text))::uuid)"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
+          "with_check": null
+        },
+        {
+          "command": "UPDATE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "carrying_item_vehicle_conditions"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(carrying_item_id IN ( SELECT carrying_items.id\n   FROM carrying_items))",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "device_registration_requests"
+      ],
+      "policies": [
+        {
+          "command": "DELETE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
+          "with_check": null
+        },
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(status = 'pending'::text)"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "true",
+          "with_check": null
+        },
+        {
+          "command": "UPDATE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "((tenant_id IS NULL) OR (tenant_id = (current_setting('app.current_tenant_id'::text))::uuid))",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "dtakologs"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = COALESCE((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid, (NULLIF(current_setting('app.current_organization_id'::text, true), ''::text))::uuid))",
+          "with_check": "(tenant_id = COALESCE((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid, (NULLIF(current_setting('app.current_organization_id'::text, true), ''::text))::uuid))"
+        },
+        {
+          "command": "DELETE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
+          "with_check": null
+        },
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
+          "with_check": null
+        },
+        {
+          "command": "UPDATE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "guidance_record_attachments"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(record_id IN ( SELECT guidance_records.id\n   FROM guidance_records))",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "notify_deliveries"
+      ],
+      "policies": [
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": null
+        },
+        {
+          "command": "UPDATE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "notify_groups"
+      ],
+      "policies": [
+        {
+          "command": "DELETE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": null
+        },
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": null
+        },
+        {
+          "command": "UPDATE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "notify_recipient_groups"
+      ],
+      "policies": [
+        {
+          "command": "DELETE",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(EXISTS ( SELECT 1\n   FROM notify_groups g\n  WHERE ((g.id = notify_recipient_groups.group_id) AND (g.tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid))))",
+          "with_check": null
+        },
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(EXISTS ( SELECT 1\n   FROM notify_groups g\n  WHERE ((g.id = notify_recipient_groups.group_id) AND (g.tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid))))"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(EXISTS ( SELECT 1\n   FROM notify_groups g\n  WHERE ((g.id = notify_recipient_groups.group_id) AND (g.tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid))))",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "tenant_allowed_emails"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "alc_api_app",
+            "alc_api_rt"
+          ],
+          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "tenko_call_logs"
+      ],
+      "policies": [
+        {
+          "command": "INSERT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "with_check": "(driver_id IN ( SELECT tenko_call_drivers.id\n   FROM tenko_call_drivers\n  WHERE (tenko_call_drivers.tenant_id = current_setting('app.current_tenant_id'::text, true))))"
+        },
+        {
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(driver_id IN ( SELECT tenko_call_drivers.id\n   FROM tenko_call_drivers\n  WHERE (tenko_call_drivers.tenant_id = current_setting('app.current_tenant_id'::text, true))))",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "tenko_carrying_item_checks"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "((session_id IN ( SELECT tenko_sessions.id\n   FROM tenko_sessions\n  WHERE (tenko_sessions.tenant_id = (current_setting('app.current_tenant_id'::text))::uuid))) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))",
+          "with_check": "((session_id IN ( SELECT tenko_sessions.id\n   FROM tenko_sessions\n  WHERE (tenko_sessions.tenant_id = (current_setting('app.current_tenant_id'::text))::uuid))) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    }
+  ],
+  "views": []
+}

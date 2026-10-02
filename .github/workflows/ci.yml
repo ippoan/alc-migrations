@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # PR を出す前に、branch を指定して流す (PR は緑になると自動でマージされるため)。
+  # safety と auto-merge は pull_request のときだけ動くので、ここからは test と replay だけが走る
+  workflow_dispatch:
 
 permissions:
   contents: read

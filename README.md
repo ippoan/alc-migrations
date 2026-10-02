@@ -85,5 +85,8 @@ CI は同じファイルを実行用ロール (`SET ROLE alc_api_rt`) でも流�
 
 CI は陽性対照として、`USING (tenant_id IS NOT NULL)` のポリシー (検査 8 では落ちない壊し方) を足すと違反の行が出ることも確かめる。
 
+PR を出す前に branch で CI を流す (PR は緑になると自動でマージされる): `gh workflow run CI --repo ippoan/alc-migrations --ref <branch>`。
+実 DB の replay job まで走るので、手元の DB は要らない (この経路では safety と auto-merge は動かない)。
+
 ## License
 MIT

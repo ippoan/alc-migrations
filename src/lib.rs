@@ -9,3 +9,6 @@ pub const INIT_LOCAL_DB: &str = include_str!("../scripts/init_local_db.sql");
 
 /// テスト用 DB 専用: migration 適用後にアプリロールへ権限を付与する SQL (本番では使わない)。
 pub const LOCAL_APP_GRANTS: &str = include_str!("../scripts/local_app_grants.sql");
+
+/// RLS の不変条件の検査 (1 文の SELECT。違反を 1 行ずつ返し、0 行なら合格)。何も変更しないので本番でも流せる。
+pub const RLS_INVARIANTS_QUERY: &str = include_str!("../ci/check_rls_invariants.sql");

@@ -1,7 +1,8 @@
--- CI の replay job 専用の検査 (migration 158)。crate には含めない (scripts/ ではなく ci/ に置く)。
+-- CI の replay job 専用の検査 (migration 158・160)。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
 -- init → 全 migration → grants を流した後の DB に対して、実行用ロール alc_api_rt で
 --   * 認証前・テナント横断の SECURITY DEFINER 関数 9 本を、tenant context 無しで呼べる
+--   * 適用履歴の件数と最大 version を関数 (160) で読める。_sqlx_migrations の直読みはできない
 --   * 同じ問い合わせを表へ直接打つと、RLS が掛かる (エラーか 0 行)
 --   * tenant_allowed_emails のポリシー (宛先を絞ってある) が alc_api_rt に効く
 -- ことを確かめる。alc_api_rt はどちらの軸 (表の所有者が postgres / alc_api_app) でも所有者でない。
@@ -133,6 +134,30 @@ BEGIN
 END
 $$;
 
+-- 1b. 適用履歴 (migration 160)。関数からは件数と最大 version の 1 行が返り、表の直読みは権限で落ちる。
+DO $$
+DECLARE
+    v_count   BIGINT;
+    v_applied BIGINT;
+    v_max     BIGINT;
+BEGIN
+    SELECT count(*), min(s.applied), min(s.max_version)
+      INTO v_count, v_applied, v_max
+      FROM alc_api.migration_status() s;
+    ASSERT v_count = 1, format('1b: migration_status が %s 行返した (1 行のはず)', v_count);
+    ASSERT v_applied >= 1 AND v_max >= v_applied,
+        format('1b: migration_status が applied = %s / max_version = %s を返した', v_applied, v_max);
+
+    BEGIN
+        PERFORM 1 FROM alc_api._sqlx_migrations LIMIT 1;
+    EXCEPTION WHEN insufficient_privilege THEN
+        RAISE NOTICE 'ok 1b: alc_api_rt は適用履歴を関数からだけ読める (applied = % / max_version = %)', v_applied, v_max;
+        RETURN;
+    END;
+    RAISE EXCEPTION '1b: alc_api_rt が _sqlx_migrations を直接読めてしまった';
+END
+$$;
+
 -- 2. 同じ問い合わせを表へ直接打つと RLS が掛かる (関数が要る理由。所有者の接続だと素通りする)。
 --    tenant context が無いので、users・devices・webhook_configs はポリシーの式がエラーになり、
 --    tenant_allowed_emails は 0 行、access_requests の INSERT は拒否される。
@@ -190,7 +215,7 @@ $$;
 
 RESET ROLE;
 
--- 4. 9 本の関数は PUBLIC から REVOKE してある (権限を何も付けていないロールからは呼べない)。
+-- 4. 158 の 9 本と 160 の 1 本は PUBLIC から REVOKE してある (権限を何も付けていないロールからは呼べない)。
 --    _sqlx_migrations は alc_api_rt から読めない。
 DO $$
 DECLARE
@@ -206,12 +231,15 @@ BEGIN
         'alc_api.list_all_callable_devices()',
         'alc_api.list_dev_device_tenant_ids()',
         'alc_api.list_tenko_overdue_webhook_configs()',
-        'alc_api.create_access_request(uuid, uuid)'
+        'alc_api.create_access_request(uuid, uuid)',
+        'alc_api.migration_status()'
     ] LOOP
         ASSERT NOT has_function_privilege('chk_nobody', v_fn, 'EXECUTE'),
             format('4: %s が PUBLIC から呼べる', v_fn);
         ASSERT has_function_privilege('alc_api_app', v_fn, 'EXECUTE'),
             format('4: %s を alc_api_app が呼べない', v_fn);
+        ASSERT has_function_privilege('alc_api_rt', v_fn, 'EXECUTE'),
+            format('4: %s を alc_api_rt が呼べない', v_fn);
         ASSERT (SELECT p.prosecdef AND p.proconfig = ARRAY['search_path=alc_api']
                   FROM pg_proc p WHERE p.oid = v_fn::regprocedure),
             format('4: %s が SECURITY DEFINER + search_path = alc_api でない', v_fn);
@@ -220,6 +248,11 @@ BEGIN
 
     ASSERT NOT has_table_privilege('alc_api_rt', 'alc_api._sqlx_migrations', 'SELECT'),
         '4: alc_api_rt が _sqlx_migrations を読める';
+
+    -- migration_status が返す 2 値は、適用履歴の表を直接数えた値と同じ
+    ASSERT (SELECT (s.applied, s.max_version) FROM alc_api.migration_status() s)
+           = (SELECT (count(*), max(m.version)) FROM alc_api._sqlx_migrations m WHERE m.success),
+        '4: migration_status の値が _sqlx_migrations と合わない';
 
     RAISE NOTICE 'ok 4: 関数 % 本は PUBLIC から呼べず、alc_api_app と alc_api_rt だけが呼べる', v_count;
 END

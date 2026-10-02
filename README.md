@@ -80,13 +80,17 @@ CI は同じファイルを実行用ロール (`SET ROLE alc_api_rt`) でも流�
 - 確かめること: テナントを 2 つ作って各表に 1 行ずつ入れ、a. テナント未設定では 1 行も読めない / b. テナント A からは A の行だけが見える (自分の行も見えない空振りは合格に数えない) / c. テナント A から B の `tenant_id` での INSERT が 42501
 - 違反を 1 行ずつ返す (0 行なら合格)。行を入れられない表も違反として出す (黙って飛ばさない)。確かめた表の数が「`tenant_id` を持つ表の数 − 例外」と合うことも、検査の中で数える
 - 行は NOT NULL で既定値の無い列だけを、カタログから自動で埋める (外部キーは親の行、`列 IN (…)` の CHECK は許される値の 1 つめ、ほかは型から)。**複数の列にまたがる CHECK を持つ表を足すと「行を入れられない」の違反が出る** — そのときだけ、ファイルの中の種 (列と値の指定。いま `users`・`tenko_schedules`・`notify_recipients` の 3 表) に足す
-- 例外 (いま在るものを固定しているだけ。足さない): 読みは `vehicle_settings_dumps` (RLS 無効)・`tenko_call_numbers`・`tenko_call_drivers`・`device_registration_requests` (SELECT が `USING (true)`)。書きは `vehicle_settings_dumps`・`device_registration_requests`・`access_requests` (INSERT の WITH CHECK がテナントを縛らない)。例外の表が例外のとおりに振る舞わなくなったら、それも違反として出す
+- 例外 (いま在るものを固定しているだけ。足さない)。例外の表が例外のとおりに振る舞わなくなったら、それも違反として出す
+  - RLS が無効 (読みも書きも通る): `vehicle_settings_dumps` (`check_rls_invariants.sql` の検査 3 の許可リストと同じ)
+  - 読み (全部のテナントの行が見える): `tenko_call_numbers`・`tenko_call_drivers`・`device_registration_requests` (SELECT が `USING (true)`。検査 8 の許可リストと同じ)
+  - 書き (別のテナントの `tenant_id` で INSERT できる): `device_registration_requests` (WITH CHECK が `status = 'pending'` だけ)・`access_requests` (WITH CHECK が `user_id = app.current_user_id` だけ)。式は `true` ではないが `tenant_id` を見ない。`check_rls_invariants.sql` の許可リストに対応するものは無い
 - 対象外: `tenant_id` 列を持たない表 (親の表を subquery で引くポリシーの 5 表と、`tenants`・`_sqlx_migrations`)。理由はファイルの冒頭
 
 CI は陽性対照として、`USING (tenant_id IS NOT NULL)` のポリシー (検査 8 では落ちない壊し方) を足すと違反の行が出ることも確かめる。
 
 PR を出す前に branch で CI を流す (PR は緑になると自動でマージされる): `gh workflow run CI --repo ippoan/alc-migrations --ref <branch>`。
 実 DB の replay job まで走るので、手元の DB は要らない (この経路では safety と auto-merge は動かない)。
+`--ref main` では流さない (main への push の run と同じ concurrency の group になり、片方が止まる)。branch を指定して使う。
 
 ## License
 MIT

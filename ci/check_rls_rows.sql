@@ -19,12 +19,16 @@
 --
 -- 検査 (テナントを 2 つ (A・B) 作り、各表に A の行と B の行を 1 つずつ入れてから):
 --   a.     テナントを設定しない transaction では、1 行も読めない
---          (42704 = app.current_tenant_id が未設定 / 22P02 = 空文字の UUID / 0 行、のどれか)
+--          (42704 = app.current_tenant_id が未設定 / 22P02 = 空文字の UUID / 0 行、のどれか)。
+--          1 つの表のポリシーの式は OR で評価され、順は決まっていない。未設定でエラーになる式が
+--          先に評価されると、緩い式が在っても a はエラー (合格) になる — その場合も b が落とす
 --   b.     テナント A を設定すると、A の行は見え、A 以外の行は見えない
 --          (自分の行も見えない「空振り」は合格に数えない)
 --   c.     テナント A を設定して、tenant_id だけを B にした行を INSERT すると 42501 (RLS の拒否)。
 --          成功も、42501 以外のエラーも違反 (別のエラーを合格に数えない)
---   seed.  tenant_id を持つ表の全部に、A・B の行を入れられる (入れられない表を黙って飛ばさない)
+--   seed.  tenant_id を持つ表の全部に、A・B の行を入れられる (入れられない表を黙って飛ばさない)。
+--          入れた後に、A の行と B の行が実際に在ることを superuser で数える
+--          (B の行が無いと、b の「A 以外の行が見えない」が空振りで合格になる)
 --   exception. 下の「例外」に載せた表が、いまも例外のとおりに振る舞う (古くなった例外を残さない)
 --   count. a・b を確かめた表の数 = tenant_id を持つ表の数 − a・b の例外、
 --          c を確かめた表の数 = tenant_id を持つ表の数 − c の例外 (数はカタログから数える)
@@ -40,17 +44,24 @@
 --   * tenko_schedules   — chk_pre_operation_instruction (規則が選ぶ pre_operation は instruction が要る)
 --   * notify_recipients — at_least_one_messaging_id (lineworks_user_id / line_user_id のどれかが要る)
 --
--- 例外 (いま在るものを固定しているだけ。足さない。理由は check_rls_invariants.sql の許可リストと同じ):
---   読み (a・b は「全部のテナントの行が見える」が期待):
---   * vehicle_settings_dumps        — RLS が無効 (検査 3 の許可リスト)。c も「通る」が期待
---   * tenko_call_numbers            — SELECT が USING (true) (検査 8 の許可リスト)。tenant_id は TEXT
---   * tenko_call_drivers            — 同上
---   * device_registration_requests  — SELECT が USING (true) (検査 8 の許可リスト)
---   書き (c は「通る」が期待。式が true ではないが、テナントを縛らないポリシー):
---   * device_registration_requests  — INSERT の WITH CHECK が status = 'pending' だけ (migration 062)。
---                                     テナントに属する前の端末が登録の申請を出す
---   * access_requests               — INSERT の WITH CHECK が user_id = app.current_user_id だけ (migration 083)。
---                                     テナントに属する前の利用者が参加の申請を出す。
+-- 例外 (いま在るものを固定しているだけ。足さない):
+--   RLS が無効 (a・b は「全部のテナントの行が見える」、c は「通る」が期待)。
+--   理由は check_rls_invariants.sql の検査 3 の許可リストと同じ:
+--   * vehicle_settings_dumps
+--   読み (a・b は「全部のテナントの行が見える」が期待)。SELECT のポリシーが USING (true)。
+--   理由は check_rls_invariants.sql の検査 8 の許可リストと同じ:
+--   * tenko_call_numbers / tenko_call_drivers (tenant_id は TEXT)
+--   * device_registration_requests
+--   書き (c は「通る」が期待)。check_rls_invariants.sql の許可リストに対応するものは無い
+--   (検査 8 が見るのは式が true そのもののポリシーだけ)。式は true ではないが、tenant_id を見ない:
+--   * device_registration_requests  — device_reg_insert (migration 062):
+--                                       FOR INSERT WITH CHECK (status = 'pending')
+--                                     status が pending なら、どのテナントの tenant_id でも通る
+--                                     (テナントに属する前の端末が、登録の申請を出す)
+--   * access_requests               — access_requests_insert (migration 083):
+--                                       FOR INSERT WITH CHECK (user_id = current_setting('app.current_user_id')::UUID)
+--                                     user_id が自分なら、どのテナント宛てでも通る
+--                                     (テナントに属する前の利用者が、参加の申請を出す)。
 --                                     c は app.current_user_id に A の利用者を立てて流す
 --
 -- 対象外 (tenant_id 列を持たない表。黙って外しているのではない):
@@ -210,6 +221,8 @@ DECLARE
     t          RECORD;
     v_sql      TEXT;
     v_progress INT;
+    v_rows_a   BIGINT;
+    v_rows_b   BIGINT;
 BEGIN
     PERFORM set_config('chk.rls_t0', clock_timestamp()::TEXT, true),
             set_config('chk.rls_tenant_a', v_a, true),
@@ -241,6 +254,21 @@ BEGIN
             END;
         END LOOP;
         EXIT WHEN v_progress = 0;
+    END LOOP;
+
+    -- INSERT が通っても、行が在るとは限らない (trigger が行を捨てる・tenant_id を書き換える)。
+    -- A の行と B の行が実際に在る表だけを「行を入れた表」に数える
+    FOR t IN SELECT r.tbl, r.tbl_oid FROM chk_rls_rows r WHERE r.seeded ORDER BY r.tbl LOOP
+        EXECUTE format('SELECT count(*) FILTER (WHERE tenant_id::TEXT = %L),
+                               count(*) FILTER (WHERE tenant_id::TEXT = %L)
+                          FROM %s', v_a, v_b, t.tbl_oid::regclass)
+           INTO v_rows_a, v_rows_b;
+        IF v_rows_a < 1 OR v_rows_b < 1 THEN
+            UPDATE chk_rls_rows
+               SET seeded = false,
+                   why = format('INSERT は通ったが、A の行 %s / B の行 %s', v_rows_a, v_rows_b)
+             WHERE tbl = t.tbl;
+        END IF;
     END LOOP;
 END
 $$;

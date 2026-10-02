@@ -27,5 +27,7 @@ tag は打たない。crates.io には出さない (`publish = false`)。
 DB を使う確認は CI の `replay` job (init → alc-migrate → grants → `_sqlx_migrations` の件数 → `ci/*.sql` の検査)。
 migration を足したら `ci.yml` の件数の期待値 (`<件数> | <最大番号>`。133 が欠番なので件数 = 最大番号 − 1) も更新する。
 検査用の SQL は `ci/` に置く (`scripts/*.sql` は crate に含まれるので置かない)。
-`ci/` のうち crate に入るのは `check_rls_invariants.sql` だけ (backend が同じ 1 文を流すため。`alc_migrations::RLS_INVARIANTS_QUERY`)。ほかの検査 SQL は今までどおり入れない。
-`check_rls_invariants.sql` は 1 文の SELECT のまま保つ (文を足さない・psql のメタコマンドを使わない)。
+`ci/` のうち crate に入るのは `check_rls_invariants.sql` と `rls_state.sql` の 2 本だけ (backend が同じ 1 文を流すため。`alc_migrations::RLS_INVARIANTS_QUERY` / `RLS_STATE_QUERY`)。ほかの検査 SQL は今までどおり入れない。
+`check_rls_invariants.sql` と `rls_state.sql` は 1 文の SELECT のまま保つ (文を足さない・psql のメタコマンドを使わない)。
+検査を足す・番号を変えるときは `src/lib.rs` の `RLS_INVARIANT_CHECKS` (検査の題の一覧) も直す (`tests/rls_queries.rs` が番号の一致を見る)。
+`rls_state.sql` は合否を決めない (カタログの実物を JSON で返すだけ)。集約には必ず `ORDER BY` を付ける (CI が 2 つのロールの出力の一致を見る)。

@@ -96,7 +96,7 @@ jobs:
             got=$(psql -At -F ' | ' -c "SELECT count(*), max(version) FROM alc_api._sqlx_migrations")
           fi
           echo "$got"
-          test "$got" = "159 | 160"
+          test "$got" = "160 | 161"
       - name: table owner
         run: |
           got=$(psql -At -c "SELECT DISTINCT relowner::regrole FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p')")
@@ -268,6 +268,53 @@ jobs:
             exit 1
           fi
           cat /tmp/rls_state_drift.diff
+          after=$(psql -v ON_ERROR_STOP=1 -q -At -f ci/rls_state.sql | jq -S 'del(.tables[].owner)')
+          printf '%s\n' "$after" | diff -u ci/expected_rls_state.json -
+          echo "ok: ROLLBACK の後、実物 = 期待する状態に戻っている"
+      # 対照 (161): 9 表のポリシーと FORCE を履歴の定義から崩した状態に 161 を当てると、期待する状態に戻ること。
+      # 崩すのは superuser (式は USING (tenant_id IS NOT NULL)。true にすると検査 8 に当たる)、161 は
+      # 軸のロール (= 表の所有者) で当てる。1 回の psql・1 transaction で流して ROLLBACK するので、
+      # DB には何も残らない (残っていないことも確かめる)。出力は rls_state.sql の 2 行:
+      # 1 行目 = 崩した後 (期待と食い違う) / 2 行目 = 161 の後 (期待と一致)
+      - name: RLS state (対照。崩した 9 表に 161 を当てると期待する状態に戻る)
+        run: |
+          break_sql=''
+          for pair in \
+            employees:tenant_isolation_employees \
+            dtako_offices:dtako_offices_tenant \
+            dtako_vehicles:dtako_vehicles_tenant \
+            dtako_event_classifications:dtako_event_cls_tenant \
+            dtako_operations:dtako_ops_tenant \
+            dtako_daily_work_hours:dtako_dwh_tenant \
+            dtako_daily_work_segments:dtako_dws_tenant \
+            dtako_upload_history:dtako_upload_tenant \
+            dtako_scrape_history:dtako_scrape_history_tenant; do
+            tbl=${pair%%:*}
+            name=${pair#*:}
+            break_sql="$break_sql DROP POLICY $name ON alc_api.$tbl; CREATE POLICY $name ON alc_api.$tbl USING (tenant_id IS NOT NULL); ALTER TABLE alc_api.$tbl FORCE ROW LEVEL SECURITY;"
+          done
+          state=$(psql -v ON_ERROR_STOP=1 -q -At \
+            -c 'BEGIN' \
+            -c "$break_sql" \
+            -f ci/rls_state.sql \
+            -c 'SET LOCAL ROLE ${{ matrix.migrate_as }}' \
+            -f migrations/161_realign_tenant_policies.sql \
+            -c 'RESET ROLE' \
+            -f ci/rls_state.sql \
+            -c 'ROLLBACK')
+          test "$(printf '%s\n' "$state" | wc -l)" = "2"
+          broken=$(printf '%s\n' "$state" | sed -n 1p | jq -S 'del(.tables[].owner)')
+          realigned=$(printf '%s\n' "$state" | sed -n 2p | jq -S 'del(.tables[].owner)')
+          if printf '%s\n' "$broken" | diff -u ci/expected_rls_state.json - > /tmp/rls_state_broken.diff; then
+            echo "9 表を崩したのに、期待する状態と食い違いません"
+            exit 1
+          fi
+          head -n 20 /tmp/rls_state_broken.diff
+          if ! printf '%s\n' "$realigned" | diff -u ci/expected_rls_state.json -; then
+            echo "161 を当てた後の状態が ci/expected_rls_state.json と食い違っています (- 期待 / + 実物)"
+            exit 1
+          fi
+          echo "ok: 崩した 9 表は、161 を当てると期待する状態に戻る"
           after=$(psql -v ON_ERROR_STOP=1 -q -At -f ci/rls_state.sql | jq -S 'del(.tables[].owner)')
           printf '%s\n' "$after" | diff -u ci/expected_rls_state.json -
           echo "ok: ROLLBACK の後、実物 = 期待する状態に戻っている"

@@ -114,7 +114,7 @@ jobs:
             echo "$got"
             exit 1
           fi
-          echo "ok: RLS の不変条件 (検査 0〜8) の違反は 0 件"
+          echo "ok: RLS の不変条件 (検査 0〜9) の違反は 0 件"
       # 同じ 1 文を、backend が繋ぐ実行用ロールで流す (実行用ロールからカタログが読めることの確認)。
       # ログインではなく SET ROLE (postgres の軸では alc_api_rt が NOLOGIN)。出力の 1 行目で、
       # 実際に alc_api_rt として流れたことを確かめる。違反が在れば 2 行目以降に出て落ちる
@@ -176,6 +176,27 @@ jobs:
             -c 'ROLLBACK')
           echo "$got"
           printf '%s\n' "$got" | grep -q "^8 | table $tbl | .*ci_positive_control (SELECT)"
+
+          after=$(psql -v ON_ERROR_STOP=1 -At -f ci/check_rls_invariants.sql)
+          test -z "$after"
+          echo "ok: ROLLBACK の後、違反は 0 件に戻っている"
+      # 陽性対照 (検査 9): COALESCE の最後の引数が列 tenant_id そのもののポリシーを作れば、9 の行だけが出ること
+      # (検査 8 = true / 検査 2 = ポリシー無し には当たらない)。1 transaction で流して ROLLBACK するので、
+      # DB には何も残らない (最後に、検査が 0 行に戻っていることも確かめる)。
+      # 検査 9 はこの 1 つの綴りだけを捕まえる (別の綴りは捕まえない)
+      - name: check RLS invariants (陽性対照。検査 9 の行が出る)
+        run: |
+          tbl=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT c.relname FROM pg_class c WHERE c.relnamespace = 'alc_api'::regnamespace AND c.relkind IN ('r', 'p') AND c.relrowsecurity AND EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped) AND NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname = 'alc_api' AND p.tablename = c.relname AND (p.qual = 'true' OR p.with_check = 'true')) ORDER BY c.relname LIMIT 1")
+          echo "table = $tbl"
+          test -n "$tbl"
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c "CREATE POLICY ci_positive_control ON alc_api.\"$tbl\" FOR SELECT USING (tenant_id = COALESCE(NULLIF(current_setting('app.current_tenant_id', true), '')::uuid, tenant_id))" \
+            -f ci/check_rls_invariants.sql \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -q "^9 | table $tbl | .*ci_positive_control (SELECT)"
+          test "$(printf '%s\n' "$got" | grep -c .)" = "1"
 
           after=$(psql -v ON_ERROR_STOP=1 -At -f ci/check_rls_invariants.sql)
           test -z "$after"

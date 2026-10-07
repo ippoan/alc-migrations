@@ -29,6 +29,10 @@
 --      (search_path の側に許可リストは無い)
 --   8. RLS 有効の表に、USING か WITH CHECK の式が true そのものの permissive なポリシーが無い
 --      (全行を通す)。下の許可リストの (表, command) を除く
+--   9. RLS 有効の表に、式の COALESCE の最後の引数が列 tenant_id そのものの permissive なポリシーが無い
+--      (tenant_id = COALESCE(<テナントの設定>, tenant_id) は、テナント未設定の接続で tenant_id = tenant_id になり
+--      全行を通す)。許可リストなし。★ 捕まえるのはこの 1 つの綴りだけ。テナント未設定で全行を通す形を
+--      全部は捕まえない (COALESCE(…, (SELECT …)) や OR current_setting(…) IS NULL などは別の綴りで、捕まえない)
 --
 -- RLS を無効のままにしてよい表 (検査 3 の許可リスト)。足すときは、ここに理由を書く:
 --   * tenants                 — テナントの一覧そのもの。ログイン中 (テナント未確定) に slug / ドメインで引く
@@ -204,6 +208,26 @@ WITH rt AS (
            ('tenko_call_numbers', 'SELECT'),
            ('tenko_call_drivers', 'SELECT'),
            ('device_registration_requests', 'SELECT'))
+
+    UNION ALL
+    -- 検査 9: pg_policies.qual / with_check (PostgreSQL が式を組み立て直した文字列) の中の
+    -- COALESCE( … , tenant_id ) の形。この綴りだけを捕まえる
+    SELECT 9, 'table ' || t.relname,
+           format('ポリシー %s (%s) の %s の式の COALESCE の最後の引数が列 tenant_id そのもの (テナント未設定で全行を通す)',
+                  p.policyname, p.cmd,
+                  CASE WHEN p.qual ~ 'COALESCE\(.*,\s*(\w+\.)?tenant_id\s*\)'
+                        AND p.with_check ~ 'COALESCE\(.*,\s*(\w+\.)?tenant_id\s*\)' THEN 'USING と WITH CHECK'
+                       WHEN p.qual ~ 'COALESCE\(.*,\s*(\w+\.)?tenant_id\s*\)' THEN 'USING'
+                       ELSE 'WITH CHECK'
+                  END)
+      FROM tbl t
+      JOIN pg_policies p
+        ON p.schemaname = 'alc_api'
+       AND p.tablename = t.relname
+     WHERE t.relrowsecurity
+       AND p.permissive = 'PERMISSIVE'
+       AND (p.qual ~ 'COALESCE\(.*,\s*(\w+\.)?tenant_id\s*\)'
+            OR p.with_check ~ 'COALESCE\(.*,\s*(\w+\.)?tenant_id\s*\)')
 )
 SELECT v.check_no, v.object, v.detail
   FROM violation v

@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "alc-migrations"
-version = "0.161.0"
+version = "0.161.1"
 dependencies = [
  "sqlx",
  "tokio",

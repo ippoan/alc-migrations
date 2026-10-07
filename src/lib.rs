@@ -40,6 +40,10 @@ pub const RLS_INVARIANT_CHECKS: &[(i32, &str)] = &[
         8,
         "RLS 有効の表に、式が true の permissive なポリシーが無い (許可リストの表を除く)",
     ),
+    (
+        9,
+        "RLS 有効の表に、COALESCE の最後の引数が列 tenant_id そのものの permissive なポリシーが無い (テナント未設定で全行を通す形のうち、この 1 つの綴りだけを捕まえる。許可リストなし)",
+    ),
 ];
 
 /// RLS まわりのいまの状態 (1 文の SELECT。`alc_api` schema のカタログを読み、1 行 1 列の JSON `state` を返す)。合否は決めない。何も変更しないので本番でも流せる。

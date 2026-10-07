@@ -52,7 +52,7 @@ migration を書くときの決まり:
 - ポリシーに `TO <role>` を書かない (宛先は PUBLIC)。書くなら `alc_api_rt` を含める。含めないと backend からは 1 行も見えない
 - `alc_api_rt` への表・sequence・関数の権限は、158 の `ALTER DEFAULT PRIVILEGES` で自動で付く。migration に `GRANT … TO alc_api_rt` を書かなくてよい (`GRANT … TO alc_api_app` は今までどおり書く。CI の `postgres` の軸では `alc_api_app` が所有者でないため)
 - 関数を PUBLIC から `REVOKE` したら、`alc_api_rt` に `GRANT EXECUTE` を明示する (`REVOKE … FROM PUBLIC` は `alc_api_rt` の EXECUTE を消さないが、誰が呼べるかを読んで分かるようにする)
-- 新しい `SECURITY DEFINER` の関数は 158 の形で作る (`SET search_path = alc_api`、PUBLIC から `REVOKE`)。view / materialized view を作らない。式が `true` のポリシー (`USING (true)` / `WITH CHECK (true)`) を書かない。どれも `ci/check_rls_invariants.sql` の検査 6〜8 が落とす (許可リストは、いま在るものを固定しているだけなので足さない)
+- 新しい `SECURITY DEFINER` の関数は 158 の形で作る (`SET search_path = alc_api`、PUBLIC から `REVOKE`)。view / materialized view を作らない。式が `true` のポリシー (`USING (true)` / `WITH CHECK (true)`) を書かない。どれも `ci/check_rls_invariants.sql` の検査 6〜8 が落とす (許可リストは、いま在るものを固定しているだけなので足さない)。式の `COALESCE` の最後の引数が列 `tenant_id` そのもの (`tenant_id = COALESCE(<テナントの設定>, tenant_id)`) のポリシーも書かない (検査 9。この 1 つの綴りだけを捕まえる。許可リストなし)
 - RLS の状態 (表・ポリシー・`SECURITY DEFINER` の関数・sequence・権限) を変えたら、`ci/update_expected_rls_state.sh` で `ci/expected_rls_state.json` を作り直し、差分を同じ PR に入れる (replay と同じ手順で作った DB に `PG*` の環境変数で繋いで流す)
 - migration の中の DML は所有者として動くので、RLS の影響を受けない。ただし FORCE 付きの表は受ける (tenant context を立てないと 0 行・拒否になる)
 - `SECURITY DEFINER` 関数も所有者として動く。FORCE 付きの表に触る関数は、中で tenant context を立てる
@@ -66,7 +66,7 @@ CI の replay job は「migration を流すロール」の 2 つの軸で回る:
 
 どちらの軸でも `ci/check_rls_invariants.sql` を流し、「ポリシーを書いたが backend に効いていない」を落とす
 (所有者の資格を取れる / 効くポリシーが無い / RLS 無しの表が増えた / 権限が付いていない /
-view が在る / PUBLIC が呼べる `SECURITY DEFINER` の関数が増えた / 式が `true` のポリシーが増えた)。
+view が在る / PUBLIC が呼べる `SECURITY DEFINER` の関数が増えた / 式が `true` のポリシーが増えた / `COALESCE` の最後の引数が列 `tenant_id` そのもののポリシーが増えた)。
 この SQL は 1 文の SELECT (違反を 1 行ずつ返す。0 行なら合格) で、何も変更しないので本番でもそのまま流せる。
 CI は同じファイルを実行用ロール (`SET ROLE alc_api_rt`) でも流し、違反を作ったときに行が出ること (陽性対照) も確かめる。
 `ci/rls_state.sql` も流し、superuser と実行用ロールで出力が完全に同じこと・表の数の自己整合・状態を変えれば出力が変わること (陽性対照) を確かめる。

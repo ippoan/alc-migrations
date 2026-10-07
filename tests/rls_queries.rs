@@ -26,13 +26,13 @@ fn sql_body(sql: &str) -> String {
 #[test]
 fn invariant_checks_match_the_branches_of_the_query() {
     let branches = check_numbers_in_query();
-    // 現行は 13 本の枝 (検査 5 が 4 本、検査 7 が 2 本)。枝を足したら、ここと RLS_INVARIANT_CHECKS を見直す。
-    assert_eq!(branches.len(), 13, "violation CTE の枝の数: {branches:?}");
+    // 現行は 14 本の枝 (検査 5 が 4 本、検査 7 が 2 本)。枝を足したら、ここと RLS_INVARIANT_CHECKS を見直す。
+    assert_eq!(branches.len(), 14, "violation CTE の枝の数: {branches:?}");
 
     let in_query: BTreeSet<i32> = branches.into_iter().collect();
     let in_list: BTreeSet<i32> = RLS_INVARIANT_CHECKS.iter().map(|(no, _)| *no).collect();
     assert_eq!(in_query, in_list);
-    assert_eq!(in_list, (0..=8).collect::<BTreeSet<i32>>());
+    assert_eq!(in_list, (0..=9).collect::<BTreeSet<i32>>());
 }
 
 #[test]

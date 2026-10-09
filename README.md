@@ -40,8 +40,9 @@ DATABASE_URL=postgresql://... cargo run --features cli --bin alc-migrate
 
 ## 本番に流す
 本番の DB に流すのは `.github/workflows/migrate.yml` の**手動実行**だけ (main のみ・environment `production` の承認)。
-`alc-migrate` だけの image (`deploy/Dockerfile`、tag は git SHA) を作り、Cloud Run job `alc-migrations-migrate` で
-`--status` (読むだけ) → 適用 → `--check` (未適用 0) の順に実行する。
+runner から直接 DB に繋ぐ (GCP は使わない)。接続文字列は org の secret `ALC_MIGRATE_DATABASE_URL` (alc-migrations と rust-alc-api にだけ公開。
+repo に値・ホスト名は書かない)。environment `production` の承認が要り、main でしか動かない。
+`alc-migrate` を build し、`--status` (読むだけ) → 適用 → `--check` (未適用 0) の順に実行して、各段の出力を step summary に出す。
 
 `alc-migrate` の引数: なし = 適用 / `--status` = 未適用の version と description を 1 行ずつ出して `pending: <件数>` (exit 0) /
 `--check` = `--status` と同じで、未適用が 1 件以上なら exit 1。接続文字列・接続先は出さない。

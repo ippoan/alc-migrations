@@ -3,7 +3,8 @@
 -- 後で印の分だけ日別を計算し直して印を消す (Refs ippoan/alc-dtako-worker#23)。
 --
 -- month は月初の日 (CHECK で縛る)。印は ON CONFLICT DO NOTHING で付け、計算し直したら DELETE する。
--- UPDATE はしないので、権限も SELECT / INSERT / DELETE だけ渡す (alc_api_app)。
+-- UPDATE はしない。alc_api_app へは SELECT / INSERT / DELETE を明示する。
+-- alc_api_rt は 158 の default privileges で付く (UPDATE を含む)。
 -- driver_id は dtako_daily_work_hours (054) と同じく employees(id) を参照する。
 CREATE TABLE alc_api.dtako_daily_recalc_pending (
     tenant_id UUID NOT NULL REFERENCES alc_api.tenants(id),

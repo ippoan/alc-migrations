@@ -2,6 +2,7 @@
 # Cloud Run job alc-migrations-migrate を 1 回実行し、その execution の stdout から
 # 「番号と説明」と「pending:」の行だけを $GITHUB_STEP_SUMMARY に出す。
 # 使い方: run-job.sh <見出し> [alc-migrate の引数...]   (PROJECT / REGION は環境変数)
+# ログ取得 (gcloud logging read) は SA の roles/logging.viewer で読む。
 # 接続先・project・execution の URL は summary にもログにも出さない。
 set -uo pipefail
 

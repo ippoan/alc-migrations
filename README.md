@@ -38,6 +38,17 @@ DATABASE_URL=postgresql://... cargo run --features cli --bin alc-migrate
 1. migration を足し、`Cargo.toml` の版を migration 番号に合わせて PR → merge
 2. rust-alc-api の `Cargo.toml` で、この crate の `rev` を merge 後の main のコミットの SHA に上げる
 
+## 本番に流す
+本番の DB に流すのは `.github/workflows/migrate.yml` の**手動実行**だけ (main のみ・environment `production` の承認)。
+`alc-migrate` だけの image (`deploy/Dockerfile`、tag は git SHA) を作り、Cloud Run job `alc-migrations-migrate` で
+`--status` (読むだけ) → 適用 → `--check` (未適用 0) の順に実行する。
+
+`alc-migrate` の引数: なし = 適用 / `--status` = 未適用の version と description を 1 行ずつ出して `pending: <件数>` (exit 0) /
+`--check` = `--status` と同じで、未適用が 1 件以上なら exit 1。接続文字列・接続先は出さない。
+
+rust-alc-api は `rev` を上げるだけ。上げてよい rev は、最後に本番へ流した SHA 以前。
+contract (消す・名前を変える) の migration は、rust-alc-api と全 worker が新スキーマに移った後に本番へ流す (release から切り離されたので人の判断)。
+
 tag は使わない。crates.io には出さない (`Cargo.toml` は `publish = false`)。
 
 ## ロールと RLS (migration 158〜)

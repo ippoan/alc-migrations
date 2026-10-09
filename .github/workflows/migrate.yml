@@ -1,0 +1,64 @@
+name: Migrate production
+
+# 本番の DB に migration を流す。人が手動で実行したときだけ (main のみ・environment production の承認)。
+# 流す順: image を build して push → job を作る/更新 → --status (読むだけ) → 適用 → --check (未適用 0)。
+# project / AR prefix は secret (ログで伏せ字になる)。repo に値を書かない。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: migrate production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PROJECT: ${{ secrets.GCP_PROJECT }}
+      REGION: ${{ vars.GCP_REGION }}
+      IMAGE: ${{ secrets.GCP_AR_PREFIX }}/alc-migrate:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push image
+        run: |
+          gcloud auth configure-docker "${IMAGE%%/*}" --quiet >/dev/null 2>&1
+          docker build -f deploy/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE" >/dev/null
+
+      - name: Create or update job
+        run: |
+          JOB=alc-migrations-migrate
+          if gcloud run jobs describe "$JOB" --region "$REGION" --project "$PROJECT" --quiet >/dev/null 2>&1; then
+            gcloud run jobs update "$JOB" --region "$REGION" --project "$PROJECT" \
+              --image "$IMAGE" --quiet >/dev/null 2>&1
+          else
+            gcloud run jobs create "$JOB" --region "$REGION" --project "$PROJECT" \
+              --image "$IMAGE" \
+              --set-secrets "DATABASE_URL=alc-app-database-url:latest" \
+              --memory 512Mi --task-timeout 300s --max-retries 0 --quiet >/dev/null 2>&1
+          fi
+
+      # 適用前に、読むだけで未適用を確かめる
+      - name: Status (before)
+        run: deploy/run-job.sh "status (before)" --status
+
+      - name: Apply
+        run: deploy/run-job.sh "apply"
+
+      - name: Check (after)
+        run: deploy/run-job.sh "check (after)" --check

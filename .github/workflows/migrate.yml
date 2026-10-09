@@ -1,11 +1,9 @@
 name: Migrate production
 
 # 本番の DB に migration を流す。人が手動で実行したときだけ (main のみ・environment production の承認)。
-# 流す順: image を build して push → job を作る/更新 → --status (読むだけ) → 適用 → --check (未適用 0)。
-# GCP へは WIF (鍵なし)。SA は vars.GCP_WIF_SERVICE_ACCOUNT_STAGING (名前に STAGING とあるが、
-# rust-alc-api の本番 deploy が使っているのと同じ SA)。project / region / AR の入口は org の変数から組む。
-# image は ghcr.io に push し、Cloud Run job は AR の ghcr の入口 (ghcr.io の取り込み) 経由で使う。
-# repo に値を書かない。
+# runner から直接繋ぐ。接続文字列は org の secret ALC_MIGRATE_DATABASE_URL (repo に値を書かない)。
+# 流す順: build → --status (読むだけ) → 適用 → --check (未適用 0)。
+# alc-migrate は接続文字列・接続先を出さないので、stdout をそのまま summary に出してよい。
 on:
   workflow_dispatch:
 
@@ -16,67 +14,48 @@ concurrency:
   group: migrate-production
   cancel-in-progress: false
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   migrate:
     name: migrate production
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
-    permissions:
-      contents: read
-      id-token: write # WIF
-      packages: write # ghcr への push
     env:
-      PROJECT: ${{ vars.GCP_PROJECT_ID_STAGING }} # 本番と同じ project
-      REGION: ${{ vars.GCP_REGION }}
-      GHCR_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+      DATABASE_URL: ${{ secrets.ALC_MIGRATE_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
+      - uses: dtolnay/rust-toolchain@1.92.0
+      - uses: swatinem/rust-cache@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_WIF_SERVICE_ACCOUNT_STAGING }}
+          shared-key: alc-migrations
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push image
-        run: |
-          docker build -f deploy/Dockerfile -t "$GHCR_IMAGE" .
-          docker push "$GHCR_IMAGE" >/dev/null
-
-      # job の image = AR の ghcr の入口 / ghcr.io/<repo>:<git SHA> (tag は 40 桁の SHA のまま)
-      - name: Resolve job image
-        run: echo "IMAGE=${REGION}-docker.pkg.dev/${PROJECT}/ghcr/${GHCR_IMAGE}" >>"$GITHUB_ENV"
-
-      - name: Create or update job
-        run: |
-          JOB=alc-migrations-migrate
-          if gcloud run jobs describe "$JOB" --region "$REGION" --project "$PROJECT" --quiet >/dev/null 2>&1; then
-            gcloud run jobs update "$JOB" --region "$REGION" --project "$PROJECT" \
-              --image "$IMAGE" --quiet >/dev/null 2>&1
-          else
-            gcloud run jobs create "$JOB" --region "$REGION" --project "$PROJECT" \
-              --image "$IMAGE" \
-              --set-secrets "DATABASE_URL=alc-app-database-url:latest" \
-              --memory 512Mi --task-timeout 300s --max-retries 0 --quiet >/dev/null 2>&1
-          fi
+      - name: Build alc-migrate
+        run: cargo build --release --locked --features cli --bin alc-migrate
 
       # 適用前に、読むだけで未適用を確かめる
       - name: Status (before)
-        run: deploy/run-job.sh "status (before)" --status
+        run: |
+          rc=0
+          out=$(target/release/alc-migrate --status 2>&1) || rc=$?
+          echo "$out"
+          { echo '### status (before) (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+          exit "$rc"
 
       - name: Apply
-        run: deploy/run-job.sh "apply"
+        run: |
+          rc=0
+          out=$(target/release/alc-migrate 2>&1) || rc=$?
+          echo "$out"
+          { echo '### apply (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+          exit "$rc"
 
       - name: Check (after)
-        run: deploy/run-job.sh "check (after)" --check
+        run: |
+          rc=0
+          out=$(target/release/alc-migrate --check 2>&1) || rc=$?
+          echo "$out"
+          { echo '### check (after) (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+          exit "$rc"

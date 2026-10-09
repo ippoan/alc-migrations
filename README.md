@@ -40,15 +40,9 @@ DATABASE_URL=postgresql://... cargo run --features cli --bin alc-migrate
 
 ## 本番に流す
 本番の DB に流すのは `.github/workflows/migrate.yml` の**手動実行**だけ (main のみ・environment `production` の承認)。
-`alc-migrate` だけの image (`deploy/Dockerfile`、tag は git SHA) を `ghcr.io/<repo>:<SHA>` に push し、Cloud Run job `alc-migrations-migrate` で
-`--status` (読むだけ) → 適用 → `--check` (未適用 0) の順に実行する。job の image は GCP の Artifact Registry の `ghcr` の入口
-(ghcr.io の取り込み。push 先ではない) 経由で読む。GCP へは WIF (鍵なし)。project / region / WIF / SA は org の変数
-(`GCP_PROJECT_ID_STAGING` / `GCP_REGION` / `GCP_WIF_PROVIDER` / `GCP_WIF_SERVICE_ACCOUNT_STAGING`。名前に STAGING とあるが
-rust-alc-api の本番 deploy と同じ project と SA) から組む。新しい secret・変数は要らない。実行ログは SA の `roles/logging.viewer` で読む。
-
-初回だけの手作業:
-1. オーナーが GCP で、上の SA に `roles/iam.workloadIdentityUser` の binding (repo `ippoan/alc-migrations`) を足す
-2. 最初の push で ghcr に package `alc-migrations` ができたら、public にする (rust-alc-api の package と同じ。AR の入口が認証なしで取り込むため)
+runner から直接 DB に繋ぐ (GCP は使わない)。接続文字列は org の secret `ALC_MIGRATE_DATABASE_URL` (alc-migrations と rust-alc-api にだけ公開。
+repo に値・ホスト名は書かない)。environment `production` の承認が要り、main でしか動かない。
+`alc-migrate` を build し、`--status` (読むだけ) → 適用 → `--check` (未適用 0) の順に実行して、各段の出力を step summary に出す。
 
 `alc-migrate` の引数: なし = 適用 / `--status` = 未適用の version と description を 1 行ずつ出して `pending: <件数>` (exit 0) /
 `--check` = `--status` と同じで、未適用が 1 件以上なら exit 1。接続文字列・接続先は出さない。

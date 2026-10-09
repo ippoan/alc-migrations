@@ -434,14 +434,6 @@ jobs:
           echo "ok: ROLLBACK の後、違反は 0 件に戻っている (ポリシーも行も残っていない)"
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない
-  # deploy/Dockerfile が壊れていないこと (push しない・secret を使わない)
-  docker-build:
-    name: docker build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -f deploy/Dockerfile .
-
   safety:
     name: safety
     if: github.event_name == 'pull_request'
@@ -602,8 +594,8 @@ jobs:
 
   auto-merge:
     name: Auto Merge
-    needs: [test, replay, docker-build, safety]
-    if: github.event_name == 'pull_request' && needs.test.result == 'success' && needs.replay.result == 'success' && needs.docker-build.result == 'success' && (needs.safety.result == 'success' || needs.safety.result == 'skipped')
+    needs: [test, replay, safety]
+    if: github.event_name == 'pull_request' && needs.test.result == 'success' && needs.replay.result == 'success' && (needs.safety.result == 'success' || needs.safety.result == 'skipped')
     uses: ippoan/ci-workflows/.github/workflows/auto-merge.yml@main
     permissions:
       contents: write

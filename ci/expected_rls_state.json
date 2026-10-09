@@ -57,6 +57,9 @@
     "devices": [
       "tenant_isolation_devices"
     ],
+    "dtako_daily_recalc_pending": [
+      "dtako_daily_recalc_pending_tenant"
+    ],
     "dtako_daily_work_hours": [
       "dtako_dwh_tenant"
     ],
@@ -480,7 +483,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 85,
+  "table_count": 86,
   "tables": [
     {
       "count": 24,
@@ -925,6 +928,32 @@
       ],
       "rls_enabled": true,
       "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "dtako_daily_recalc_pending"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
+          "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
       "runtime_role_can_act_as_owner": false,
       "runtime_role_privileges": [
         "SELECT",

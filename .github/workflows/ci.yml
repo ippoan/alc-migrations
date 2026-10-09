@@ -85,8 +85,25 @@ jobs:
       - name: setup_owner_axis.sql (alc_api_app の軸だけ)
         if: matrix.migrate_as == 'alc_api_app'
         run: psql -v ON_ERROR_STOP=1 -v app_password="$PGPASSWORD" -f ci/setup_owner_axis.sql
+      - run: cargo build --features cli --bin alc-migrate
+      # 適用前: --status は何も書かず exit 0 で全件を未適用として出す。--check は未適用が在るので exit 1 (陽性対照)
+      - name: alc-migrate --status / --check (適用前)
+        run: |
+          got=$(cargo run -q --features cli --bin alc-migrate -- --status)
+          printf '%s\n' "$got" | tail -n 3
+          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 161"
+          if cargo run -q --features cli --bin alc-migrate -- --check >/dev/null; then
+            echo "--check は未適用が在れば exit 1 のはず"
+            exit 1
+          fi
       - name: migrate (0 -> latest) as ${{ matrix.migrate_as }}
         run: cargo run --features cli --bin alc-migrate
+      - name: alc-migrate --status / --check (適用後)
+        run: |
+          got=$(cargo run -q --features cli --bin alc-migrate -- --status)
+          echo "$got"
+          test "$got" = "pending: 0"
+          cargo run -q --features cli --bin alc-migrate -- --check
       - name: local_app_grants.sql
         run: psql -v ON_ERROR_STOP=1 -f scripts/local_app_grants.sql
       - name: applied count
@@ -417,6 +434,14 @@ jobs:
           echo "ok: ROLLBACK の後、違反は 0 件に戻っている (ポリシーも行も残っていない)"
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない
+  # deploy/Dockerfile が壊れていないこと (push しない・secret を使わない)
+  docker-build:
+    name: docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deploy/Dockerfile .
+
   safety:
     name: safety
     if: github.event_name == 'pull_request'
@@ -577,8 +602,8 @@ jobs:
 
   auto-merge:
     name: Auto Merge
-    needs: [test, replay, safety]
-    if: github.event_name == 'pull_request' && needs.test.result == 'success' && needs.replay.result == 'success' && (needs.safety.result == 'success' || needs.safety.result == 'skipped')
+    needs: [test, replay, docker-build, safety]
+    if: github.event_name == 'pull_request' && needs.test.result == 'success' && needs.replay.result == 'success' && needs.docker-build.result == 'success' && (needs.safety.result == 'success' || needs.safety.result == 'skipped')
     uses: ippoan/ci-workflows/.github/workflows/auto-merge.yml@main
     permissions:
       contents: write

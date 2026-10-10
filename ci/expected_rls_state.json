@@ -674,13 +674,12 @@
       ]
     },
     {
-      "count": 5,
+      "count": 4,
       "names": [
         "leave_alerts",
         "leave_grants",
         "leave_opening",
-        "leave_pages",
-        "leave_periods"
+        "leave_pages"
       ],
       "policies": [
         {
@@ -1107,6 +1106,32 @@
     {
       "count": 1,
       "names": [
+        "leave_periods"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
+          "with_check": "((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid) AND (EXISTS ( SELECT 1\n   FROM leave_pages p\n  WHERE ((p.id = leave_periods.page_id) AND (p.tenant_id = leave_periods.tenant_id)))))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
         "leave_settings"
       ],
       "policies": [
@@ -1117,7 +1142,7 @@
             "public"
           ],
           "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
-          "with_check": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)"
+          "with_check": "((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid) AND ((lineworks_channel_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM lineworks_channels p\n  WHERE ((p.id = leave_settings.lineworks_channel_id) AND (p.tenant_id = leave_settings.tenant_id))))) AND ((notify_recipient_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM notify_recipients p\n  WHERE ((p.id = leave_settings.notify_recipient_id) AND (p.tenant_id = leave_settings.tenant_id))))) AND ((notify_bot_config_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM bot_configs p\n  WHERE ((p.id = leave_settings.notify_bot_config_id) AND (p.tenant_id = leave_settings.tenant_id))))))"
         }
       ],
       "rls_enabled": true,

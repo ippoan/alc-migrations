@@ -1,14 +1,14 @@
 -- CI の replay job 専用の検査。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
 -- 子の表が外部キーで指す親の行が、子と同じテナントに在ることを、書き込みのポリシーが確かめていること
--- (migration 169) を、実行用ロール alc_api_rt から実際の行で確かめる。外部キーの検査は RLS を通らないので、
+-- (migration 169・170) を、実行用ロール alc_api_rt から実際の行で確かめる。外部キーの検査は RLS を通らないので、
 -- 子の tenant_id だけを見るポリシーでは、別のテナントの親の id を指す行が書けてしまう。Refs ippoan/rust-alc-api#747
 --
 -- 組ごとに、テナント A を設定した alc_api_rt から:
 --   bad. A の子の行で、外部キーだけを B の親の行にした INSERT / UPDATE が 42501 (RLS の拒否) で落ちる
 --        (成功も、42501 以外のエラーも違反)
 --   ok.  同じ文で、外部キーを A の親の行にすると 1 行書ける (何でも拒否するポリシーを合格に数えない)
--- 組は列挙する (migration 169 の対象と同じ)。ci/check_rls_rows.sql の c (tenant_id だけを替える) では、
+-- 組は列挙する (migration 169・170 の対象と同じ)。ci/check_rls_rows.sql の c (tenant_id だけを替える) では、
 -- この穴は捕まらない。
 --
 -- 違反を 1 行ずつ返す (check, object, detail)。0 行なら合格。
@@ -76,6 +76,19 @@ BEGIN
 
         INSERT INTO alc_api.trouble_tasks (tenant_id, ticket_id) VALUES (v_t, v_ticket) RETURNING id INTO v_id;
         INSERT INTO chk_pt_ids VALUES (v_tenant, 'task', v_id);
+
+        -- 勤怠 (migration 170)
+        INSERT INTO alc_api.bot_configs (tenant_id, name, client_id, client_secret_encrypted, service_account, private_key_encrypted, bot_id)
+            VALUES (v_t, 'ci', 'ci', 'ci', 'ci', 'ci', md5(gen_random_uuid()::text)) RETURNING id INTO v_id;
+        INSERT INTO chk_pt_ids VALUES (v_tenant, 'bot_config', v_id);
+
+        INSERT INTO alc_api.lineworks_channels (tenant_id, bot_config_id, channel_id)
+            VALUES (v_t, v_id, md5(gen_random_uuid()::text)) RETURNING id INTO v_id;
+        INSERT INTO chk_pt_ids VALUES (v_tenant, 'channel', v_id);
+
+        INSERT INTO alc_api.leave_pages (tenant_id, r2_key, page_no, received_at)
+            VALUES (v_t, md5(gen_random_uuid()::text), 1, now()) RETURNING id INTO v_id;
+        INSERT INTO chk_pt_ids VALUES (v_tenant, 'leave_page', v_id);
     END LOOP;
 
     -- UPDATE を試す A の子の行 (親は全部 A)
@@ -84,6 +97,16 @@ BEGIN
            (SELECT id FROM chk_pt_ids WHERE tenant = 'A' AND kind = 'document'), 'line'
     RETURNING id INTO v_id;
     INSERT INTO chk_pt_ids VALUES ('A', 'delivery', v_id);
+
+    -- leave_settings は tenant_id が主キー (1 テナント 1 行) なので、A の行 1 つを UPDATE で試す。
+    -- leave_periods の UPDATE を試す A の行 (親は A の leave_page)
+    INSERT INTO alc_api.leave_settings (tenant_id)
+    SELECT id FROM chk_pt_ids WHERE tenant = 'A' AND kind = 'tenant';
+    INSERT INTO alc_api.leave_periods (tenant_id, page_id, kind, start_date, end_date)
+    SELECT (SELECT id FROM chk_pt_ids WHERE tenant = 'A' AND kind = 'tenant'),
+           (SELECT id FROM chk_pt_ids WHERE tenant = 'A' AND kind = 'leave_page'), 'yukyu', current_date, current_date
+    RETURNING id INTO v_id;
+    INSERT INTO chk_pt_ids VALUES ('A', 'period', v_id);
 END $$;
 
 -- 組 (name, 文)。文の中の {X} は A の行の id に置き換える (X は chk_pt_ids.kind)。
@@ -131,7 +154,19 @@ INSERT INTO chk_pt_cases (name, parent, stmt) VALUES
     ('trouble_workflow_transitions.from_state_id', 'state',
      'INSERT INTO alc_api.trouble_workflow_transitions (tenant_id, from_state_id, to_state_id) VALUES ({tenant}, {P}, {state2})'),
     ('trouble_workflow_transitions.to_state_id', 'state',
-     'INSERT INTO alc_api.trouble_workflow_transitions (tenant_id, from_state_id, to_state_id) VALUES ({tenant}, {state2}, {P})');
+     'INSERT INTO alc_api.trouble_workflow_transitions (tenant_id, from_state_id, to_state_id) VALUES ({tenant}, {state2}, {P})'),
+    -- 勤怠 (170)。leave_settings は CHECK leave_settings_single_destination (lineworks_channel_id と notify_recipient_id は
+    -- 同時に非 NULL 不可) があり、ok で書いた値が次の組に残るので、試す列以外は同じ文で NULL に戻す
+    ('leave_settings.lineworks_channel_id', 'channel',
+     'UPDATE alc_api.leave_settings SET lineworks_channel_id = {P}, notify_recipient_id = NULL, notify_bot_config_id = NULL WHERE tenant_id = {tenant}'),
+    ('leave_settings.notify_recipient_id', 'recipient',
+     'UPDATE alc_api.leave_settings SET lineworks_channel_id = NULL, notify_recipient_id = {P}, notify_bot_config_id = NULL WHERE tenant_id = {tenant}'),
+    ('leave_settings.notify_bot_config_id', 'bot_config',
+     'UPDATE alc_api.leave_settings SET lineworks_channel_id = NULL, notify_recipient_id = NULL, notify_bot_config_id = {P} WHERE tenant_id = {tenant}'),
+    ('leave_periods.page_id (INSERT)', 'leave_page',
+     'INSERT INTO alc_api.leave_periods (tenant_id, page_id, kind, start_date, end_date) VALUES ({tenant}, {P}, ''yukyu'', current_date, current_date)'),
+    ('leave_periods.page_id (UPDATE)', 'leave_page',
+     'UPDATE alc_api.leave_periods SET page_id = {P} WHERE id = {period}');
 
 DO $$
 DECLARE

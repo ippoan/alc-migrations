@@ -33,6 +33,8 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-features -- -D warnings
       - run: cargo test
+      # migrate.yml の contract 歯止め (ci/check_contract.sh) の陰性・陽性の対照
+      - run: bash ci/check_contract_test.sh
 
   # 空の DB に 0 から全 migration を流し、本番と同じ順 (init → migrate → grants) で通ることを確認する。
   # 軸は「migration を流すロール」= 表の所有者になるロール:

@@ -17,7 +17,7 @@ alc-api の DB migration (sqlx) を埋め込んだ薄い crate。SQL 以外の�
 
 ## 配り方
 rust-alc-api が git 依存 (rev 固定) で読む。取り込みは rust-alc-api の `Cargo.toml` の rev を上げる。
-本番に流すのは `.github/workflows/migrate.yml` の手動実行だけ (main のみ・environment `production` の承認。runner から直接、org の secret `ALC_MIGRATE_DATABASE_URL` で繋ぐ。`alc-migrate` を build して status → 適用 → check の順。GCP・image は使わない)。rust-alc-api は rev を上げるだけで、上げてよい rev は最後に本番へ流した SHA 以前。contract (消す・名前を変える) の migration は、rust-alc-api と全 worker が新スキーマに移った後に本番へ流す (release から切り離されたので人の判断)。
+本番へは `migrate.yml` が流す。足すだけの migration は main への merge (CI が push で成功) で自動で入る (environment なし。org の secret `ALC_MIGRATE_DATABASE_URL`、runner から直接。status → contract の検査 → 適用 → check)。未適用の SQL に `DROP TABLE|SCHEMA|TYPE` / `DROP COLUMN` / `RENAME` / `TRUNCATE` (`ci/check_contract.sh`。ポリシー・index・関数・制約の作り直しは通す) が在れば自動は fail して流さない。contract は rust-alc-api と全 worker が新スキーマに移った後、workflow_dispatch (environment `production` の承認) に `allow_contract=true` で人が流す。rust-alc-api は rev を上げるだけで、上げてよい rev は最後に本番へ流した SHA 以前。
 `alc-migrate` は引数なし = 適用 / `--status` = 未適用を出す (exit 0) / `--check` = 未適用が在れば exit 1。出力に接続文字列・接続先を出さない。
 tag は打たない。crates.io には出さない (`publish = false`)。
 

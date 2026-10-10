@@ -133,6 +133,21 @@
     "items": [
       "tenant_isolation_items"
     ],
+    "leave_alerts": [
+      "leave_alerts_tenant"
+    ],
+    "leave_grants": [
+      "leave_grants_tenant"
+    ],
+    "leave_pages": [
+      "leave_pages_tenant"
+    ],
+    "leave_periods": [
+      "leave_periods_tenant"
+    ],
+    "leave_settings": [
+      "leave_settings_tenant"
+    ],
     "lineworks_channels": [
       "tenant_isolation"
     ],
@@ -380,6 +395,12 @@
       "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
+      "signature": "leave_resolve_mailbox(text)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
       "signature": "list_all_callable_devices()"
     },
     {
@@ -483,7 +504,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 86,
+  "table_count": 91,
   "tables": [
     {
       "count": 24,
@@ -641,6 +662,35 @@
       ],
       "rls_enabled": true,
       "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 4,
+      "names": [
+        "leave_alerts",
+        "leave_grants",
+        "leave_pages",
+        "leave_periods"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
+          "with_check": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
       "runtime_role_can_act_as_owner": false,
       "runtime_role_privileges": [
         "SELECT",
@@ -1038,6 +1088,32 @@
           ],
           "using": "(record_id IN ( SELECT guidance_records.id\n   FROM guidance_records))",
           "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "leave_settings"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
+          "with_check": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)"
         }
       ],
       "rls_enabled": true,

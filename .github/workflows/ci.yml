@@ -463,6 +463,61 @@ jobs:
           left=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT count(*) FROM alc_api.tenants WHERE name LIKE 'ci check rls parent tenant %'")
           test "$left" = "0"
           echo "ok: 168 までの形では trouble_tasks の 2 組だけが違反になり、ROLLBACK の後に行は残っていない"
+      # テナントを持つ表どうしの外部キーが tenant_id を含む複合になっていること (カタログだけを見る。ポリシーは解析しない)。
+      # 複合になっていない外部キーの一覧 = ci/fk_tenant_composite_allowlist.txt (先頭 4 項目) でなければ落ちる:
+      # 許可リストに無い外部キー (not-composite) も、検査に出なくなった許可リストの行 (stale-allowlist) も落とす。
+      # 実行用ロールからもカタログが読めて同じ結果になることも確かめる
+      - name: check FK tenant composite (tenant を含まない外部キーは許可リストのものだけ)
+        run: |
+          bash ci/check_fk_tenant_composite.sh
+          bash ci/check_fk_tenant_composite.sh 'SET LOCAL ROLE alc_api_rt'
+      # 対照: 使い捨ての表を同じ transaction で作り、ROLLBACK する (DB には何も残らない。残っていないことも確かめる)
+      #   陽性: 親の id だけを指す非複合の外部キー → その 1 本だけが not-composite で出て落ちる
+      #         (同じ transaction の複合の外部キー (ON DELETE SET NULL (<列>)) は出ない)
+      #   陽性: 列は揃っていても tenant_id と id を取り違えて対にした外部キー → 落ちる
+      #   陰性: 複合の外部キーだけなら通る
+      #   陽性: 許可リストの先頭の外部キーを DROP する → その行が stale-allowlist で出て落ちる
+      - name: check FK tenant composite (対照。非複合を拾い、複合は拾わず、許可リストの残りを拾う)
+        run: |
+          parent='CREATE TABLE alc_api.ci_fk_parent (id UUID PRIMARY KEY, tenant_id UUID NOT NULL REFERENCES alc_api.tenants (id), UNIQUE (tenant_id, id));'
+          good='CREATE TABLE alc_api.ci_fk_good (id UUID PRIMARY KEY, tenant_id UUID NOT NULL REFERENCES alc_api.tenants (id), parent_id UUID, FOREIGN KEY (tenant_id, parent_id) REFERENCES alc_api.ci_fk_parent (tenant_id, id) ON DELETE SET NULL (parent_id));'
+          bad='CREATE TABLE alc_api.ci_fk_bad (id UUID PRIMARY KEY, tenant_id UUID NOT NULL REFERENCES alc_api.tenants (id), parent_id UUID REFERENCES alc_api.ci_fk_parent (id));'
+          crossed='CREATE TABLE alc_api.ci_fk_crossed (id UUID PRIMARY KEY, tenant_id UUID NOT NULL REFERENCES alc_api.tenants (id), parent_id UUID, FOREIGN KEY (tenant_id, parent_id) REFERENCES alc_api.ci_fk_parent (id, tenant_id));'
+
+          if got=$(bash ci/check_fk_tenant_composite.sh "$parent $good $bad"); then
+            echo "非複合の外部キーを作ったのに gate が通りました"
+            exit 1
+          fi
+          echo "$got"
+          test "$got" = "not-composite | ci_fk_bad | parent_id | ci_fk_parent | ci_fk_bad_parent_id_fkey"
+
+          if got=$(bash ci/check_fk_tenant_composite.sh "$parent $crossed"); then
+            echo "tenant_id と id を取り違えた外部キーを作ったのに gate が通りました"
+            exit 1
+          fi
+          echo "$got"
+          test "$got" = "not-composite | ci_fk_crossed | tenant_id,parent_id | ci_fk_parent | ci_fk_crossed_tenant_id_parent_id_fkey"
+
+          bash ci/check_fk_tenant_composite.sh "$parent $good"
+
+          first=$(grep -v -e '^#' -e '^[[:space:]]*$' ci/fk_tenant_composite_allowlist.txt | awk 'NR == 1')
+          key=$(printf '%s\n' "$first" | cut -d '|' -f 1-4 | sed 's/ $//')
+          tbl=$(printf '%s\n' "$key" | cut -d '|' -f 1 | tr -d ' ')
+          con=$(printf '%s\n' "$key" | cut -d '|' -f 4 | tr -d ' ')
+          echo "table = $tbl / constraint = $con"
+          test -n "$tbl"
+          test -n "$con"
+          if got=$(bash ci/check_fk_tenant_composite.sh "ALTER TABLE alc_api.\"$tbl\" DROP CONSTRAINT \"$con\""); then
+            echo "許可リストの外部キーを消したのに gate が通りました"
+            exit 1
+          fi
+          echo "$got"
+          test "$got" = "stale-allowlist | $key"
+
+          bash ci/check_fk_tenant_composite.sh
+          left=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT count(*) FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relname LIKE 'ci\_fk\_%'")
+          test "$left" = "0"
+          echo "ok: ROLLBACK の後、使い捨ての表は残っておらず、gate は通る"
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない
   safety:

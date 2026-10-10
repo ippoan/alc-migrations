@@ -1,7 +1,7 @@
 -- CI の replay job 専用の検査 (migration 158・160)。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
 -- init → 全 migration → grants を流した後の DB に対して、実行用ロール alc_api_rt で
---   * 認証前・テナント横断の SECURITY DEFINER 関数 10 本を、tenant context 無しで呼べる
+--   * 認証前・テナント横断の SECURITY DEFINER 関数 11 本を、tenant context 無しで呼べる
 --   * 適用履歴の件数と最大 version を関数 (160) で読める。_sqlx_migrations の直読みはできない
 --   * 同じ問い合わせを表へ直接打つと、RLS が掛かる (エラーか 0 行)
 --   * tenant_allowed_emails のポリシー (宛先を絞ってある) が alc_api_rt に効く
@@ -74,7 +74,7 @@ CREATE ROLE chk_nobody NOLOGIN;
 -- ---------------------------------------------------------------------------
 SET ROLE alc_api_rt;
 
--- 1. 10 本の関数を、tenant context 無しで呼べる。返す行は元の SQL と同じ範囲。
+-- 1. 11 本の関数を、tenant context 無しで呼べる。返す行は元の SQL と同じ範囲。
 DO $$
 DECLARE
     v_key      CONSTANT TEXT := current_setting('chk.key');
@@ -87,6 +87,7 @@ DECLARE
     v_inv      alc_api.tenant_allowed_emails;
     v_req      alc_api.access_requests;
     v_leave    RECORD;
+    v_tenants  UUID[];
     v_count    BIGINT;
 BEGIN
     ASSERT current_setting('app.current_tenant_id', true) IS NULL,
@@ -149,7 +150,12 @@ BEGIN
     SELECT count(*) INTO v_count FROM alc_api.leave_resolve_mailbox(v_key || '-none');
     ASSERT v_count = 0, '1: leave_resolve_mailbox が、在るはずのない行を返した';
 
-    RAISE NOTICE 'ok 1: 認証前・テナント横断の関数 10 本を、alc_api_rt が tenant context 無しで呼べる';
+    -- leave_enabled_tenants (164): 有効な tenant だけが、tenant_id 順に返る
+    SELECT array_agg(t.tenant_id ORDER BY t.tenant_id) INTO v_tenants
+      FROM alc_api.leave_enabled_tenants() t WHERE t.tenant_id IN (v_tenant_a, v_tenant_b);
+    ASSERT v_tenants = ARRAY[v_tenant_a], '1: leave_enabled_tenants が有効な tenant だけを返していない';
+
+    RAISE NOTICE 'ok 1: 認証前・テナント横断の関数 11 本を、alc_api_rt が tenant context 無しで呼べる';
 END
 $$;
 
@@ -238,7 +244,7 @@ $$;
 
 RESET ROLE;
 
--- 4. 158 の 9 本・160 の 1 本・163 の 1 本は PUBLIC から REVOKE してある (権限を何も付けていないロールからは呼べない)。
+-- 4. 158 の 9 本・160 の 1 本・163 の 1 本・164 の 1 本は PUBLIC から REVOKE してある (権限を何も付けていないロールからは呼べない)。
 --    _sqlx_migrations は alc_api_rt から読めない。
 DO $$
 DECLARE
@@ -256,6 +262,7 @@ BEGIN
         'alc_api.list_tenko_overdue_webhook_configs()',
         'alc_api.create_access_request(uuid, uuid)',
         'alc_api.leave_resolve_mailbox(text)',
+        'alc_api.leave_enabled_tenants()',
         'alc_api.migration_status()'
     ] LOOP
         ASSERT NOT has_function_privilege('chk_nobody', v_fn, 'EXECUTE'),

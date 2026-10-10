@@ -1,11 +1,24 @@
 name: Migrate production
 
-# 本番の DB に migration を流す。人が手動で実行したときだけ (main のみ・environment production の承認)。
-# runner から直接繋ぐ。接続文字列は org の secret ALC_MIGRATE_DATABASE_URL (repo に値を書かない)。
-# 流す順: build → --status (読むだけ) → 適用 → --check (未適用 0)。
-# alc-migrate は接続文字列・接続先を出さないので、stdout をそのまま summary に出してよい。
+# 本番の DB に migration を流す。入口は 2 つ。
+#   * 自動: main の CI が push で成功したとき (足すだけの migration は merge で本番に入る)。
+#     environment は使わない (承認待ちで止めない)。contract (DROP TABLE / DROP COLUMN / RENAME / TRUNCATE ほか。
+#     ci/check_contract.sh) を含めば fail して流さない。
+#   * 手動: workflow_dispatch (main のみ・environment production の承認)。やり直しと contract 用。
+#     contract を流すときは allow_contract=true を付ける。
+# runner から直接繋ぐ。接続文字列は org の secret ALC_MIGRATE_DATABASE_URL (repo に値を書かない。environment に依らない)。
+# 流す順は .github/actions/migrate: build → --status → contract の検査 → 適用 → --check (未適用 0)。
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      allow_contract:
+        description: "contract (DROP TABLE / DROP COLUMN / RENAME / TRUNCATE ほか) を含む migration を流す"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,44 +31,31 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  migrate:
-    name: migrate production
-    if: github.ref == 'refs/heads/main'
+  migrate-auto:
+    name: migrate production (auto)
+    if: >-
+      github.event_name == 'workflow_run'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.ALC_MIGRATE_DATABASE_URL }}
+    steps:
+      # CI が通った SHA をそのまま流す
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: ./.github/actions/migrate
+
+  migrate-manual:
+    name: migrate production (manual)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     env:
       DATABASE_URL: ${{ secrets.ALC_MIGRATE_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.92.0
-      - uses: swatinem/rust-cache@v2
+      - uses: ./.github/actions/migrate
         with:
-          shared-key: alc-migrations
-
-      - name: Build alc-migrate
-        run: cargo build --release --locked --features cli --bin alc-migrate
-
-      # 適用前に、読むだけで未適用を確かめる
-      - name: Status (before)
-        run: |
-          rc=0
-          out=$(target/release/alc-migrate --status 2>&1) || rc=$?
-          echo "$out"
-          { echo '### status (before) (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
-          exit "$rc"
-
-      - name: Apply
-        run: |
-          rc=0
-          out=$(target/release/alc-migrate 2>&1) || rc=$?
-          echo "$out"
-          { echo '### apply (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
-          exit "$rc"
-
-      - name: Check (after)
-        run: |
-          rc=0
-          out=$(target/release/alc-migrate --check 2>&1) || rc=$?
-          echo "$out"
-          { echo '### check (after) (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
-          exit "$rc"
+          allow-contract: ${{ inputs.allow_contract }}

@@ -1,0 +1,79 @@
+name: migrate production
+description: >-
+  build → --status → contract の検査 → 適用 → --check。
+  呼び手の job が checkout と env DATABASE_URL (org の secret ALC_MIGRATE_DATABASE_URL) を用意する。
+  alc-migrate は接続文字列・接続先を出さないので、stdout をそのまま summary に出してよい。
+
+inputs:
+  allow-contract:
+    description: "true のときだけ contract (ci/check_contract.sh) の検査を飛ばす"
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@1.92.0
+    - uses: swatinem/rust-cache@v2
+      with:
+        shared-key: alc-migrations
+
+    - name: Build alc-migrate
+      shell: bash
+      run: cargo build --release --locked --features cli --bin alc-migrate
+
+    # 適用前に、読むだけで未適用を確かめる
+    - name: Status (before)
+      shell: bash
+      run: |
+        rc=0
+        out=$(target/release/alc-migrate --status 2>&1) || rc=$?
+        echo "$out"
+        printf '%s\n' "$out" >"$RUNNER_TEMP/status.txt"
+        { echo '### status (before) (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+        exit "$rc"
+
+    # 未適用の migration に contract (消す・名前を変える) が在れば、適用しない
+    - name: Contract guard
+      shell: bash
+      env:
+        ALLOW_CONTRACT: ${{ inputs.allow-contract }}
+      run: |
+        if [ "$ALLOW_CONTRACT" = "true" ]; then
+          echo "::notice::allow_contract=true のため contract の検査を飛ばす"
+          exit 0
+        fi
+        files=()
+        while read -r version _; do
+          case "$version" in
+            ''|*[!0-9]*) continue ;;
+          esac
+          f=$(printf 'migrations/%03d_*.sql' "$((10#$version))")
+          # shellcheck disable=SC2206
+          m=($f)
+          [ -e "${m[0]}" ] || { echo "::error::未適用の version $version の SQL が見つからない"; exit 1; }
+          files+=("${m[0]}")
+        done <"$RUNNER_TEMP/status.txt"
+        echo "未適用 ${#files[@]} 件を検査する"
+        if [ "${#files[@]}" -gt 0 ] && ! ci/check_contract.sh "${files[@]}"; then
+          echo "::error::contract の migration を含むので自動では流さない。workflow_dispatch で allow_contract=true を付けて手で流す"
+          exit 1
+        fi
+
+    - name: Apply
+      shell: bash
+      run: |
+        rc=0
+        out=$(target/release/alc-migrate 2>&1) || rc=$?
+        echo "$out"
+        { echo '### apply (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+        exit "$rc"
+
+    - name: Check (after)
+      shell: bash
+      run: |
+        rc=0
+        out=$(target/release/alc-migrate --check 2>&1) || rc=$?
+        echo "$out"
+        { echo '### check (after) (exit '"$rc"')'; echo '```'; echo "$out"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+        exit "$rc"

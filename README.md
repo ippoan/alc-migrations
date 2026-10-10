@@ -39,10 +39,24 @@ DATABASE_URL=postgresql://... cargo run --features cli --bin alc-migrate
 2. rust-alc-api の `Cargo.toml` で、この crate の `rev` を merge 後の main のコミットの SHA に上げる
 
 ## 本番に流す
-本番の DB に流すのは `.github/workflows/migrate.yml` の**手動実行**だけ (main のみ・environment `production` の承認)。
+本番の DB には `.github/workflows/migrate.yml` が流す。入口は 2 つ。
+
+- **自動**: main の `CI` が push で成功すると、その SHA を checkout して流す。足すだけの migration は merge で本番に入る。environment は使わない (承認待ちで止まらない)。
+- **手動**: `workflow_dispatch` (main のみ・environment `production` の承認)。やり直しと contract 用。入力 `allow_contract` (既定 false)。
+
 runner から直接 DB に繋ぐ (GCP は使わない)。接続文字列は org の secret `ALC_MIGRATE_DATABASE_URL` (alc-migrations と rust-alc-api にだけ公開。
-repo に値・ホスト名は書かない)。environment `production` の承認が要り、main でしか動かない。
-`alc-migrate` を build し、`--status` (読むだけ) → 適用 → `--check` (未適用 0) の順に実行して、各段の出力を step summary に出す。
+repo に値・ホスト名は書かない。environment には依らない)。
+`alc-migrate` を build し、`--status` (読むだけ) → contract の検査 → 適用 → `--check` (未適用 0) の順に実行して、各段の出力を step summary に出す (段は `.github/actions/migrate`)。
+
+**contract の歯止め**: `--status` が出した未適用の migration の SQL を `ci/check_contract.sh` で検査する。コメントを除いて 次の「データを失う・名前が変わる」ものが在れば (大小文字は無視)、自動の経路は `::error::` を出して適用せずに fail する。
+
+- `DROP TABLE` / `DROP SCHEMA` / `DROP TYPE`、`TRUNCATE`
+- `ALTER TABLE ... DROP [COLUMN] <名前>` (`CONSTRAINT` / `DEFAULT` / `NOT NULL` / `IDENTITY` / `EXPRESSION` が続かないもの)
+- `RENAME` (`TO` / `COLUMN` ほか)
+
+作り直し型 (`DROP POLICY` / `INDEX` / `FUNCTION` / `TRIGGER` / `VIEW` / `CONSTRAINT`、`ALTER COLUMN ... DROP NOT NULL` / `DROP DEFAULT`) は止めない。
+止まった migration は rust-alc-api と全 worker が新スキーマに移った後に、`workflow_dispatch` で `allow_contract=true` を付けて人が流す (true のときだけ検査を飛ばす)。
+検査の陰性・陽性の対照は `ci/check_contract_test.sh` (CI の `test` job)。
 
 `alc-migrate` の引数: なし = 適用 / `--status` = 未適用の version と description を 1 行ずつ出して `pending: <件数>` (exit 0) /
 `--check` = `--status` と同じで、未適用が 1 件以上なら exit 1。接続文字列・接続先は出さない。

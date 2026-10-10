@@ -93,7 +93,7 @@ jobs:
         run: |
           got=$(cargo run -q --features cli --bin alc-migrate -- --status)
           printf '%s\n' "$got" | tail -n 3
-          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 167"
+          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 168"
           if cargo run -q --features cli --bin alc-migrate -- --check >/dev/null; then
             echo "--check は未適用が在れば exit 1 のはず"
             exit 1
@@ -115,7 +115,7 @@ jobs:
             got=$(psql -At -F ' | ' -c "SELECT count(*), max(version) FROM alc_api._sqlx_migrations")
           fi
           echo "$got"
-          test "$got" = "167 | 168"
+          test "$got" = "168 | 169"
       - name: table owner
         run: |
           got=$(psql -At -c "SELECT DISTINCT relowner::regrole FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p')")
@@ -434,6 +434,35 @@ jobs:
           echo "left = $left"
           test "$left" = "0"
           echo "ok: ROLLBACK の後、違反は 0 件に戻っている (ポリシーも行も残っていない)"
+      # 子の外部キーが別のテナントの親の行を指す書き込みを、alc_api_rt から実際の行で確かめる (migration 169)。
+      # 1 transaction で流して ROLLBACK するので、DB には何も残らない。ON_ERROR_STOP を外さない
+      - name: check RLS parent tenant (別のテナントの親を指す書き込みが 42501 で止まる)
+        run: |
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -f ci/check_rls_parent_tenant.sql \
+            -c 'ROLLBACK')
+          if [ -n "$got" ]; then
+            echo "別のテナントの親を指す書き込みの違反:"
+            echo "$got"
+            exit 1
+          fi
+          echo "ok: 別のテナントの親を指す書き込みの違反は 0 件"
+      # 陽性対照: trouble_tasks の WITH CHECK を子の tenant_id だけ (168 までの形) に戻すと、bad の行が出ること
+      - name: check RLS parent tenant (陽性対照。168 までの形に戻すと bad の行が出る)
+        run: |
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c "ALTER POLICY tenant_isolation ON alc_api.trouble_tasks WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::uuid)" \
+            -f ci/check_rls_parent_tenant.sql \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -q '^bad | trouble_tasks.ticket_id (INSERT) | '
+          printf '%s\n' "$got" | grep -q '^bad | trouble_tasks.ticket_id (UPDATE) | '
+          test "$(printf '%s\n' "$got" | wc -l)" = "2"
+          left=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT count(*) FROM alc_api.tenants WHERE name LIKE 'ci check rls parent tenant %'")
+          test "$left" = "0"
+          echo "ok: 168 までの形では trouble_tasks の 2 組だけが違反になり、ROLLBACK の後に行は残っていない"
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない
   safety:

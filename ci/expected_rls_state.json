@@ -516,55 +516,6 @@
   "table_count": 92,
   "tables": [
     {
-      "count": 24,
-      "names": [
-        "api_tokens",
-        "camera_health_logs",
-        "cameras",
-        "item_files",
-        "items",
-        "maintenance_categories",
-        "maintenance_files",
-        "maintenance_records",
-        "maintenance_vehicles",
-        "trouble_categories",
-        "trouble_custom_field_defs",
-        "trouble_field_layouts",
-        "trouble_files",
-        "trouble_notification_prefs",
-        "trouble_offices",
-        "trouble_progress_statuses",
-        "trouble_schedules",
-        "trouble_status_history",
-        "trouble_task_statuses",
-        "trouble_task_types",
-        "trouble_tasks",
-        "trouble_tickets",
-        "trouble_workflow_states",
-        "trouble_workflow_transitions"
-      ],
-      "policies": [
-        {
-          "command": "ALL",
-          "permissive": true,
-          "roles": [
-            "public"
-          ],
-          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
-          "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)"
-        }
-      ],
-      "rls_enabled": true,
-      "rls_forced": false,
-      "runtime_role_can_act_as_owner": false,
-      "runtime_role_privileges": [
-        "SELECT",
-        "INSERT",
-        "UPDATE",
-        "DELETE"
-      ]
-    },
-    {
       "count": 19,
       "names": [
         "carrying_items",
@@ -596,6 +547,49 @@
           ],
           "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
           "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 18,
+      "names": [
+        "api_tokens",
+        "camera_health_logs",
+        "cameras",
+        "item_files",
+        "items",
+        "maintenance_categories",
+        "maintenance_files",
+        "maintenance_records",
+        "maintenance_vehicles",
+        "trouble_categories",
+        "trouble_custom_field_defs",
+        "trouble_field_layouts",
+        "trouble_notification_prefs",
+        "trouble_offices",
+        "trouble_progress_statuses",
+        "trouble_task_statuses",
+        "trouble_task_types",
+        "trouble_workflow_states"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)"
         }
       ],
       "rls_enabled": true,
@@ -1149,7 +1143,7 @@
             "public"
           ],
           "using": null,
-          "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)"
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid) AND (EXISTS ( SELECT 1\n   FROM notify_documents p\n  WHERE ((p.id = notify_deliveries.document_id) AND (p.tenant_id = notify_deliveries.tenant_id)))) AND ((recipient_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM notify_recipients p\n  WHERE ((p.id = notify_deliveries.recipient_id) AND (p.tenant_id = notify_deliveries.tenant_id))))) AND ((triggered_by_user_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM users p\n  WHERE ((p.id = notify_deliveries.triggered_by_user_id) AND (p.tenant_id = notify_deliveries.tenant_id))))))"
         },
         {
           "command": "SELECT",
@@ -1167,7 +1161,7 @@
             "public"
           ],
           "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
-          "with_check": null
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid) AND (EXISTS ( SELECT 1\n   FROM notify_documents p\n  WHERE ((p.id = notify_deliveries.document_id) AND (p.tenant_id = notify_deliveries.tenant_id)))) AND ((recipient_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM notify_recipients p\n  WHERE ((p.id = notify_deliveries.recipient_id) AND (p.tenant_id = notify_deliveries.tenant_id))))) AND ((triggered_by_user_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM users p\n  WHERE ((p.id = notify_deliveries.triggered_by_user_id) AND (p.tenant_id = notify_deliveries.tenant_id))))))"
         }
       ],
       "rls_enabled": true,
@@ -1255,7 +1249,7 @@
             "public"
           ],
           "using": null,
-          "with_check": "(EXISTS ( SELECT 1\n   FROM notify_groups g\n  WHERE ((g.id = notify_recipient_groups.group_id) AND (g.tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid))))"
+          "with_check": "((EXISTS ( SELECT 1\n   FROM notify_groups g\n  WHERE ((g.id = notify_recipient_groups.group_id) AND (g.tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)))) AND (EXISTS ( SELECT 1\n   FROM notify_recipients r\n  WHERE ((r.id = notify_recipient_groups.recipient_id) AND (r.tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)))))"
         },
         {
           "command": "SELECT",
@@ -1353,6 +1347,162 @@
           ],
           "using": "((session_id IN ( SELECT tenko_sessions.id\n   FROM tenko_sessions\n  WHERE (tenko_sessions.tenant_id = (current_setting('app.current_tenant_id'::text))::uuid))) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))",
           "with_check": "((session_id IN ( SELECT tenko_sessions.id\n   FROM tenko_sessions\n  WHERE (tenko_sessions.tenant_id = (current_setting('app.current_tenant_id'::text))::uuid))) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "trouble_files"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid) AND (EXISTS ( SELECT 1\n   FROM trouble_tickets p\n  WHERE ((p.id = trouble_files.ticket_id) AND (p.tenant_id = trouble_files.tenant_id)))) AND ((task_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM trouble_tasks p\n  WHERE ((p.id = trouble_files.task_id) AND (p.tenant_id = trouble_files.tenant_id))))))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "trouble_schedules"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid) AND (EXISTS ( SELECT 1\n   FROM trouble_tickets p\n  WHERE ((p.id = trouble_schedules.ticket_id) AND (p.tenant_id = trouble_schedules.tenant_id)))))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "trouble_status_history"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid) AND (EXISTS ( SELECT 1\n   FROM trouble_tickets p\n  WHERE ((p.id = trouble_status_history.ticket_id) AND (p.tenant_id = trouble_status_history.tenant_id)))) AND ((from_state_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM trouble_workflow_states p\n  WHERE ((p.id = trouble_status_history.from_state_id) AND (p.tenant_id = trouble_status_history.tenant_id))))) AND (EXISTS ( SELECT 1\n   FROM trouble_workflow_states p\n  WHERE ((p.id = trouble_status_history.to_state_id) AND (p.tenant_id = trouble_status_history.tenant_id)))))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "trouble_tasks"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid) AND (EXISTS ( SELECT 1\n   FROM trouble_tickets p\n  WHERE ((p.id = trouble_tasks.ticket_id) AND (p.tenant_id = trouble_tasks.tenant_id)))))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "trouble_tickets"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid) AND ((status_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM trouble_workflow_states p\n  WHERE ((p.id = trouble_tickets.status_id) AND (p.tenant_id = trouble_tickets.tenant_id))))) AND ((person_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM employees p\n  WHERE ((p.id = trouble_tickets.person_id) AND (p.tenant_id = trouble_tickets.tenant_id))))))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "trouble_workflow_transitions"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid) AND (EXISTS ( SELECT 1\n   FROM trouble_workflow_states p\n  WHERE ((p.id = trouble_workflow_transitions.from_state_id) AND (p.tenant_id = trouble_workflow_transitions.tenant_id)))) AND (EXISTS ( SELECT 1\n   FROM trouble_workflow_states p\n  WHERE ((p.id = trouble_workflow_transitions.to_state_id) AND (p.tenant_id = trouble_workflow_transitions.tenant_id)))))"
         }
       ],
       "rls_enabled": true,

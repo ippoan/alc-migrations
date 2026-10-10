@@ -93,7 +93,7 @@ jobs:
         run: |
           got=$(cargo run -q --features cli --bin alc-migrate -- --status)
           printf '%s\n' "$got" | tail -n 3
-          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 165"
+          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 166"
           if cargo run -q --features cli --bin alc-migrate -- --check >/dev/null; then
             echo "--check は未適用が在れば exit 1 のはず"
             exit 1
@@ -115,7 +115,7 @@ jobs:
             got=$(psql -At -F ' | ' -c "SELECT count(*), max(version) FROM alc_api._sqlx_migrations")
           fi
           echo "$got"
-          test "$got" = "165 | 166"
+          test "$got" = "166 | 167"
       - name: table owner
         run: |
           got=$(psql -At -c "SELECT DISTINCT relowner::regrole FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p')")

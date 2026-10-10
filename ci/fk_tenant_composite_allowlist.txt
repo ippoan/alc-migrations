@@ -1,0 +1,69 @@
+# ci/check_fk_tenant_composite.sh の許可リスト。tenant_id を含む複合になっていない外部キーのうち、いま在るもの。
+# 1 行 1 本: 子の表 | 列 | 親の表 | 制約名 | 理由 | 説明
+# 理由:
+#   policy — 書き込みのポリシーの WITH CHECK が親の tenant_id の一致を確かめる (migration 169・170。
+#            実際に塞がっていることは ci/check_rls_parent_tenant.sql が行で確かめる)。複合に直すまでの次善の策
+#   todo   — 未対応 (別のテナントの親の行を指す行を作れるかどうか、確かめていない)
+# 足さない。テナントを持つ表どうしの外部キーは (tenant_id, <列>) REFERENCES <親> (tenant_id, id) の複合にする。
+# 複合にできない理由があるときだけ、その理由を書いて足す。
+# 複合に直した外部キーは、この行を消す (検査に出なくなった行が残っていると gate が落ちる)。
+# 並びは検査の出力と同じ (子の表・制約名の順)。gate が比べるのは先頭の 4 項目だけ。# で始まる行と空行は読まない。
+access_requests | user_id | users | access_requests_user_id_fkey | todo | 未対応
+camera_health_logs | camera_id | cameras | camera_health_logs_camera_id_fkey | todo | 未対応
+cameras | active_down_ticket_id | trouble_tickets | cameras_active_down_ticket_id_fkey | todo | 未対応
+cameras | office_id | trouble_offices | cameras_office_id_fkey | todo | 未対応
+car_inspection_deregistration_files | file_uuid | files | car_inspection_deregistration_files_file_uuid_fkey | todo | 未対応
+car_inspection_nfc_tags | car_inspection_id | car_inspection | car_inspection_nfc_tags_car_inspection_id_fkey | todo | 未対応
+communication_items | target_employee_id | employees | communication_items_target_employee_id_fkey | todo | 未対応
+device_registration_requests | device_id | devices | device_registration_requests_device_id_fkey | todo | 未対応。ON DELETE SET NULL (複合にするときは SET NULL (<列>) にする)。子の tenant_id が NULL 可 (NULL の行は複合の外部キーでも検査されない)
+devices | approved_by | users | devices_approved_by_fkey | todo | 未対応
+devices | last_login_employee_id | employees | devices_last_login_employee_id_fkey | todo | 未対応
+devices | user_id | users | devices_user_id_fkey | todo | 未対応
+dtako_daily_recalc_pending | driver_id | employees | dtako_daily_recalc_pending_driver_id_fkey | todo | 未対応
+dtako_daily_work_hours | driver_id | employees | dtako_daily_work_hours_driver_id_fkey | todo | 未対応
+dtako_daily_work_segments | driver_id | employees | dtako_daily_work_segments_driver_id_fkey | todo | 未対応
+dtako_operations | driver_id | employees | dtako_operations_driver_id_fkey | todo | 未対応
+dtako_operations | office_id | dtako_offices | dtako_operations_office_id_fkey | todo | 未対応
+dtako_operations | vehicle_id | dtako_vehicles | dtako_operations_vehicle_id_fkey | todo | 未対応
+dtako_upload_history | uploaded_by | users | dtako_upload_history_uploaded_by_fkey | todo | 未対応
+employee_health_baselines | employee_id | employees | employee_health_baselines_employee_id_fkey | todo | 未対応
+equipment_failures | session_id | tenko_sessions | equipment_failures_session_id_fkey | todo | 未対応
+file_access_logs | file_uuid | files | file_access_logs_file_uuid_fkey | todo | 未対応
+files_append | file_uuid | files | files_append_file_uuid_fkey | todo | 未対応
+guidance_records | employee_id | employees | guidance_records_employee_id_fkey | todo | 未対応
+guidance_records | parent_id | guidance_records | guidance_records_parent_id_fkey | todo | 未対応
+items | parent_id | items | items_parent_id_fkey | todo | 未対応
+leave_periods | page_id | leave_pages | leave_periods_page_id_fkey | policy | 170 の WITH CHECK が親の tenant_id の一致を確かめる
+leave_settings | lineworks_channel_id | lineworks_channels | leave_settings_lineworks_channel_id_fkey | policy | 170 の WITH CHECK が親の tenant_id の一致を確かめる。ON DELETE SET NULL (複合にするときは SET NULL (<列>) にする)
+leave_settings | notify_bot_config_id | bot_configs | leave_settings_notify_bot_config_id_fkey | policy | 170 の WITH CHECK が親の tenant_id の一致を確かめる。ON DELETE SET NULL (複合にするときは SET NULL (<列>) にする)
+leave_settings | notify_recipient_id | notify_recipients | leave_settings_notify_recipient_id_fkey | policy | 170 の WITH CHECK が親の tenant_id の一致を確かめる。ON DELETE SET NULL (複合にするときは SET NULL (<列>) にする)
+lineworks_channels | bot_config_id | bot_configs | lineworks_channels_bot_config_id_fkey | todo | 未対応
+maintenance_files | record_id | maintenance_records | maintenance_files_record_id_fkey | todo | 未対応
+maintenance_records | category_id | maintenance_categories | maintenance_records_category_id_fkey | todo | 未対応
+maintenance_records | vehicle_id | maintenance_vehicles | maintenance_records_vehicle_id_fkey | todo | 未対応
+measurements | employee_id | employees | measurements_employee_id_fkey | todo | 未対応
+notify_deliveries | document_id | notify_documents | notify_deliveries_document_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+notify_deliveries | recipient_id | notify_recipients | notify_deliveries_recipient_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+notify_deliveries | triggered_by_user_id | users | notify_deliveries_triggered_by_user_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる。ON DELETE SET NULL (複合にするときは SET NULL (<列>) にする)
+tenko_records | employee_id | employees | tenko_records_employee_id_fkey | todo | 未対応
+tenko_records | session_id | tenko_sessions | tenko_records_session_id_fkey | todo | 未対応
+tenko_schedules | consumed_by_session_id | tenko_sessions | fk_consumed_by_session | todo | 未対応
+tenko_schedules | employee_id | employees | tenko_schedules_employee_id_fkey | todo | 未対応
+tenko_sessions | employee_id | employees | tenko_sessions_employee_id_fkey | todo | 未対応
+tenko_sessions | manager_judgment_by | employees | tenko_sessions_manager_judgment_by_fkey | todo | 未対応
+tenko_sessions | measurement_id | measurements | tenko_sessions_measurement_id_fkey | todo | 未対応
+tenko_sessions | schedule_id | tenko_schedules | tenko_sessions_schedule_id_fkey | todo | 未対応。ON DELETE SET NULL (複合にするときは SET NULL (<列>) にする)
+timecard_cards | employee_id | employees | timecard_cards_employee_id_fkey | todo | 未対応
+trouble_files | task_id | trouble_tasks | trouble_files_task_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_files | ticket_id | trouble_tickets | trouble_files_ticket_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_schedules | ticket_id | trouble_tickets | trouble_schedules_ticket_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_status_history | from_state_id | trouble_workflow_states | trouble_status_history_from_state_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_status_history | ticket_id | trouble_tickets | trouble_status_history_ticket_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_status_history | to_state_id | trouble_workflow_states | trouble_status_history_to_state_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_tasks | ticket_id | trouble_tickets | trouble_tasks_ticket_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_tickets | person_id | employees | trouble_tickets_person_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_tickets | status_id | trouble_workflow_states | trouble_tickets_status_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_workflow_transitions | from_state_id | trouble_workflow_states | trouble_workflow_transitions_from_state_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+trouble_workflow_transitions | to_state_id | trouble_workflow_states | trouble_workflow_transitions_to_state_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+vein_templates | employee_id | employees | vein_templates_employee_id_fkey | todo | 未対応
+webhook_deliveries | config_id | webhook_configs | webhook_deliveries_config_id_fkey | todo | 未対応

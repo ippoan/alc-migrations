@@ -40,11 +40,12 @@
 --   * CHECK が「列 = ANY (ARRAY[値, …])」(列 IN (…)) の列 — 許される値の 1 つめ
 --   * それ以外           — 型から作る (text は乱数、uuid は生成、数値は 1、…)
 -- 複数の列にまたがる CHECK は上の規則で満たせないので、その表だけ「種」(列と値の指定) を持つ。
--- いま 4 表。表を足して seed の違反が出たら、まず規則で入らないかを考え、だめなら種を足す:
+-- いま 5 表。表を足して seed の違反が出たら、まず規則で入らないかを考え、だめなら種を足す:
 --   * users             — user_has_provider (google_sub / lineworks_id / line_user_id のどれかが要る)
 --   * tenko_schedules   — chk_pre_operation_instruction (規則が選ぶ pre_operation は instruction が要る)
 --   * notify_recipients — at_least_one_messaging_id (lineworks_user_id / line_user_id のどれかが要る)
 --   * dtako_daily_recalc_pending — month は月初の日でなければならない (CHECK。型から作る日付では通らない)
+--   * leave_grants      — expires_on は grant_date より後でなければならない (CHECK。型から作る日付では通らない)
 --
 -- 例外 (いま在るものを固定しているだけ。足さない):
 --   RLS が無効 (a・b は「全部のテナントの行が見える」、c は「通る」が期待)。
@@ -132,7 +133,9 @@ INSERT INTO chk_rls_seeds (tbl, col, expr) VALUES
     ('tenko_schedules',   'tenko_type',   '''post_operation'''),
     ('notify_recipients', 'provider',     '''line'''),
     ('notify_recipients', 'line_user_id', 'md5(gen_random_uuid()::text)'),
-    ('dtako_daily_recalc_pending', 'month', 'date_trunc(''month'', now())::date');
+    ('dtako_daily_recalc_pending', 'month', 'date_trunc(''month'', now())::date'),
+    ('leave_grants',      'grant_date',   'current_date'),
+    ('leave_grants',      'expires_on',   'current_date + 365');
 
 -- 1 行ぶんの INSERT 文を組む。p_tenant = tenant_id に入れる値、p_parent_tenant = 親の行を探すテナント
 -- (種の行は両方同じ。c の行は tenant_id だけが別)。組めなければ例外 (呼ぶ側が理由として控える)。

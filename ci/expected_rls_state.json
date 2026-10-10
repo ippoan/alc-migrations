@@ -139,6 +139,9 @@
     "leave_grants": [
       "leave_grants_tenant"
     ],
+    "leave_opening": [
+      "leave_opening_tenant"
+    ],
     "leave_pages": [
       "leave_pages_tenant"
     ],
@@ -510,7 +513,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 91,
+  "table_count": 92,
   "tables": [
     {
       "count": 24,
@@ -677,10 +680,11 @@
       ]
     },
     {
-      "count": 4,
+      "count": 5,
       "names": [
         "leave_alerts",
         "leave_grants",
+        "leave_opening",
         "leave_pages",
         "leave_periods"
       ],

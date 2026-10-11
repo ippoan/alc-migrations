@@ -36,7 +36,8 @@
 --
 -- 行の入れ方 (NOT NULL で既定値の無い列だけを埋める。規則は表に依らない):
 --   * tenant_id          — そのテナント
---   * 外部キーの列       — 親の表の、同じテナントの行 (親 → 子の順は、入る表が増えなくなるまで繰り返す)
+--   * 外部キーの列       — 親の表の、同じテナントの行 (親 → 子の順は、入る表が増えなくなるまで繰り返す)。
+--                          外部キーは 1 列のものと、(tenant_id, <列>) の複合 (migration 172) のものを見る
 --   * CHECK が「列 = ANY (ARRAY[値, …])」(列 IN (…)) の列 — 許される値の 1 つめ
 --   * それ以外           — 型から作る (text は乱数、uuid は生成、数値は 1、…)
 -- 複数の列にまたがる CHECK は上の規則で満たせないので、その表だけ「種」(列と値の指定) を持つ。
@@ -166,8 +167,13 @@ BEGIN
                                           AND NOT ta.attisdropped) THEN 'tenant_id'
                      END AS parent_filter
                 FROM pg_constraint k
-                JOIN pg_attribute pa ON pa.attrelid = k.confrelid AND pa.attnum = k.confkey[1]
-               WHERE k.contype = 'f' AND k.conrelid = a.attrelid AND k.conkey = ARRAY[a.attnum]
+                JOIN pg_attribute pa ON pa.attrelid = k.confrelid
+                                    AND pa.attnum = k.confkey[array_position(k.conkey, a.attnum)]
+               WHERE k.contype = 'f' AND k.conrelid = a.attrelid
+                 AND (k.conkey = ARRAY[a.attnum]
+                      OR k.conkey = ARRAY[(SELECT ta.attnum FROM pg_attribute ta
+                                            WHERE ta.attrelid = a.attrelid AND ta.attname = 'tenant_id'
+                                              AND NOT ta.attisdropped), a.attnum])
                ORDER BY k.oid
                LIMIT 1
           ) fk ON true

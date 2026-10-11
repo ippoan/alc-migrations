@@ -1,0 +1,12 @@
+-- LINE WORKS Bot の Private Key の列 `bot_configs.private_key_encrypted` を落とす (contract)。
+-- Refs ippoan/rust-alc-api#747
+--
+-- 166 で NOT NULL を外し (expand)、鍵は Cloudflare Secrets Store の 1 本 (alc-lineworks-worker が読む) に
+-- 移した。この列を読み書きするコードは全 repo で無くなった (rust-alc-api #749 / #750、
+-- alc-lineworks-worker #6、alc-notify-worker #5、rust-leave-worker #10)。166 のコメントのとおり、
+-- 残った列を別の migration で落とし、鍵を DB に残さない。
+--
+-- 列を落とすだけ (contract)。merge では本番に入らない (ci/check_contract.sh が止める)。
+-- migrate.yml の workflow_dispatch に allow_contract=true を付けて手で流す。
+-- notify_line_configs の同名の列は別の表なので触らない。
+ALTER TABLE alc_api.bot_configs DROP COLUMN IF EXISTS private_key_encrypted;

@@ -78,8 +78,8 @@ BEGIN
         INSERT INTO chk_pt_ids VALUES (v_tenant, 'task', v_id);
 
         -- 勤怠 (migration 170)
-        INSERT INTO alc_api.bot_configs (tenant_id, name, client_id, client_secret_encrypted, service_account, private_key_encrypted, bot_id)
-            VALUES (v_t, 'ci', 'ci', 'ci', 'ci', 'ci', md5(gen_random_uuid()::text)) RETURNING id INTO v_id;
+        INSERT INTO alc_api.bot_configs (tenant_id, name, client_id, client_secret_encrypted, service_account, bot_id)
+            VALUES (v_t, 'ci', 'ci', 'ci', 'ci', md5(gen_random_uuid()::text)) RETURNING id INTO v_id;
         INSERT INTO chk_pt_ids VALUES (v_tenant, 'bot_config', v_id);
 
         INSERT INTO alc_api.lineworks_channels (tenant_id, bot_config_id, channel_id)

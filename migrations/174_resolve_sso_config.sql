@@ -6,6 +6,12 @@
 --
 -- 定義 (引数名・戻りの列・言語・本文) は scripts/init_local_db.sql にあったものをそのまま写す。
 -- 規範に合わせて足したのは REVOKE / GRANT だけ (SECURITY DEFINER と SET search_path は元からある)。
+--
+-- 先頭の DROP FUNCTION IF EXISTS: 本番の既存の関数は引数名が確かめられていない。CREATE OR REPLACE は
+-- 引数名が違うと "cannot change name of input parameter" で失敗するので、先に落として作り直す
+-- (同じ migration の transaction の中。権限は下の REVOKE / GRANT で明示する)。
+DROP FUNCTION IF EXISTS alc_api.resolve_sso_config(TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION alc_api.resolve_sso_config(
     p_provider TEXT,
     p_lookup_key TEXT

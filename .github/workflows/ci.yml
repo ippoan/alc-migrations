@@ -93,7 +93,7 @@ jobs:
         run: |
           got=$(cargo run -q --features cli --bin alc-migrate -- --status)
           printf '%s\n' "$got" | tail -n 3
-          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 171"
+          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 172"
           if cargo run -q --features cli --bin alc-migrate -- --check >/dev/null; then
             echo "--check は未適用が在れば exit 1 のはず"
             exit 1
@@ -115,7 +115,7 @@ jobs:
             got=$(psql -At -F ' | ' -c "SELECT count(*), max(version) FROM alc_api._sqlx_migrations")
           fi
           echo "$got"
-          test "$got" = "171 | 172"
+          test "$got" = "172 | 173"
       - name: table owner
         run: |
           got=$(psql -At -c "SELECT DISTINCT relowner::regrole FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p')")
@@ -518,6 +518,29 @@ jobs:
           left=$(psql -v ON_ERROR_STOP=1 -At -c "SELECT count(*) FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relname LIKE 'ci\_fk\_%'")
           test "$left" = "0"
           echo "ok: ROLLBACK の後、使い捨ての表は残っておらず、gate は通る"
+
+      # 機械用資格情報 (migration 173): tenants を消すと資格情報も消えること (ON DELETE CASCADE) と、
+      # 照合関数が実行用ロールから 1 行だけ返すこと。1 transaction で流して ROLLBACK するので、DB には何も残らない
+      - name: machine_credentials (CASCADE と照合関数)
+        run: |
+          # テナントの id は DB に作らせる (リテラルは書かない)。照合の結果は temp 表に受けて、
+          # 実行用ロールを外してから、作ったテナントの id と突き合わせる
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c "INSERT INTO alc_api.tenants (name) VALUES ('ci machine credentials')" \
+            -c "INSERT INTO alc_api.machine_credentials (username, tenant_id, purpose, label, secret_hash) SELECT ('mc_' || repeat('0', 16)), id, 'leave-scan', 'ci', repeat('a', 64) FROM alc_api.tenants WHERE name = 'ci machine credentials'" \
+            -c 'SET LOCAL ROLE alc_api_rt' \
+            -c "CREATE TEMP TABLE ci_lookup ON COMMIT DROP AS SELECT * FROM alc_api.machine_credential_lookup(('mc_' || repeat('0', 16)))" \
+            -c "SELECT 'lookup-none', count(*) FROM alc_api.machine_credential_lookup(('mc_' || repeat('f', 16)))" \
+            -c 'RESET ROLE' \
+            -c "SELECT 'lookup', l.purpose, l.revoked, l.tenant_id = t.id FROM ci_lookup l JOIN alc_api.tenants t ON t.name = 'ci machine credentials'" \
+            -c "DELETE FROM alc_api.tenants WHERE name = 'ci machine credentials'" \
+            -c "SELECT 'after-delete', count(*) FROM alc_api.machine_credentials WHERE username = ('mc_' || repeat('0', 16))" \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -qx 'lookup | leave-scan | f | t'
+          printf '%s\n' "$got" | grep -qx 'lookup-none | 0'
+          printf '%s\n' "$got" | grep -qx 'after-delete | 0'
 
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない
   safety:

@@ -154,6 +154,9 @@
     "lineworks_channels": [
       "tenant_isolation"
     ],
+    "machine_credentials": [
+      "machine_credentials_tenant"
+    ],
     "maintenance_categories": [
       "tenant_isolation"
     ],
@@ -473,6 +476,12 @@
       "signature": "lookup_notify_recipient_for_send(uuid)"
     },
     {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "machine_credential_lookup(text)"
+    },
+    {
       "public_can_execute": true,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
@@ -513,7 +522,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 92,
+  "table_count": 93,
   "tables": [
     {
       "count": 19,
@@ -1143,6 +1152,32 @@
           ],
           "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
           "with_check": "((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid) AND ((lineworks_channel_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM lineworks_channels p\n  WHERE ((p.id = leave_settings.lineworks_channel_id) AND (p.tenant_id = leave_settings.tenant_id))))) AND ((notify_recipient_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM notify_recipients p\n  WHERE ((p.id = leave_settings.notify_recipient_id) AND (p.tenant_id = leave_settings.tenant_id))))) AND ((notify_bot_config_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM bot_configs p\n  WHERE ((p.id = leave_settings.notify_bot_config_id) AND (p.tenant_id = leave_settings.tenant_id))))))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "machine_credentials"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
+          "with_check": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)"
         }
       ],
       "rls_enabled": true,

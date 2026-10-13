@@ -61,7 +61,7 @@
 --   * mark_delivery_read (071)
 --   * set_current_tenant (004)
 --   * verify_device_token (116)
---   * resolve_sso_config — migration の履歴に無い (テスト用 DB では scripts/init_local_db.sql が作る)
+--   * resolve_sso_config (174)
 --
 -- 式が true のポリシーを持ってよい (表, command) (検査 8 の許可リスト)。理由は migration のコメントのまま。
 -- 式を絞るのは別の migration で扱う (ここでは、いまの状態を固定するだけ)。ここに足さない:

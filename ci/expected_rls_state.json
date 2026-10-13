@@ -407,12 +407,6 @@
       "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
-      "signature": "leave_resolve_mailbox(text)"
-    },
-    {
-      "public_can_execute": false,
-      "runtime_role_can_execute": true,
-      "search_path": "alc_api",
       "signature": "list_all_callable_devices()"
     },
     {

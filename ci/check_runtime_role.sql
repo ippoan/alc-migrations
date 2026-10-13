@@ -1,7 +1,7 @@
 -- CI の replay job 専用の検査 (migration 158・160)。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
 -- init → 全 migration → grants を流した後の DB に対して、実行用ロール alc_api_rt で
---   * 認証前・テナント横断の SECURITY DEFINER 関数 11 本を、tenant context 無しで呼べる
+--   * 認証前・テナント横断の SECURITY DEFINER 関数 10 本を、tenant context 無しで呼べる
 --   * 適用履歴の件数と最大 version を関数 (160) で読める。_sqlx_migrations の直読みはできない
 --   * 同じ問い合わせを表へ直接打つと、RLS が掛かる (エラーか 0 行)
 --   * tenant_allowed_emails のポリシー (宛先を絞ってある) が alc_api_rt に効く
@@ -60,11 +60,9 @@ VALUES (current_setting('chk.tenant_a')::UUID, 'tenko_overdue', 'https://example
        (current_setting('chk.tenant_b')::UUID, 'tenko_overdue', 'https://example.invalid/', FALSE);
 
 -- 勤怠申請の設定 (163): テナント a は受付中、テナント b は無効
-INSERT INTO alc_api.leave_settings (tenant_id, mailbox, allowed_senders, enabled)
-VALUES (current_setting('chk.tenant_a')::UUID, 'chk-' || substr(md5(current_setting('chk.key')), 1, 12),
-        ARRAY['sender@example.invalid'], TRUE),
-       (current_setting('chk.tenant_b')::UUID, 'chk-' || substr(md5(current_setting('chk.key') || 'b'), 1, 12),
-        '{}', FALSE);
+INSERT INTO alc_api.leave_settings (tenant_id, enabled)
+VALUES (current_setting('chk.tenant_a')::UUID, TRUE),
+       (current_setting('chk.tenant_b')::UUID, FALSE);
 
 -- 権限を何も付けていないロール (PUBLIC からの REVOKE の確認用)
 CREATE ROLE chk_nobody NOLOGIN;
@@ -74,7 +72,7 @@ CREATE ROLE chk_nobody NOLOGIN;
 -- ---------------------------------------------------------------------------
 SET ROLE alc_api_rt;
 
--- 1. 11 本の関数を、tenant context 無しで呼べる。返す行は元の SQL と同じ範囲。
+-- 1. 10 本の関数を、tenant context 無しで呼べる。返す行は元の SQL と同じ範囲。
 DO $$
 DECLARE
     v_key      CONSTANT TEXT := current_setting('chk.key');
@@ -86,7 +84,6 @@ DECLARE
     v_user     alc_api.users;
     v_inv      alc_api.tenant_allowed_emails;
     v_req      alc_api.access_requests;
-    v_leave    RECORD;
     v_tenants  UUID[];
     v_count    BIGINT;
 BEGIN
@@ -139,23 +136,12 @@ BEGIN
     ASSERT v_req.tenant_id = v_tenant_b AND v_req.user_id = v_user_g AND v_req.status = 'pending',
         '1: create_access_request が返した行が違う';
 
-    -- leave_resolve_mailbox: 有効な宛先だけ引け、大文字でも引け、無効・未登録は 0 行
-    SELECT * INTO STRICT v_leave
-      FROM alc_api.leave_resolve_mailbox(upper('chk-' || substr(md5(v_key), 1, 12)));
-    ASSERT v_leave.tenant_id = v_tenant_a AND v_leave.allowed_senders = ARRAY['sender@example.invalid'],
-        '1: leave_resolve_mailbox が違う行を返した';
-    SELECT count(*) INTO v_count
-      FROM alc_api.leave_resolve_mailbox('chk-' || substr(md5(v_key || 'b'), 1, 12));
-    ASSERT v_count = 0, '1: leave_resolve_mailbox が無効な宛先を返した';
-    SELECT count(*) INTO v_count FROM alc_api.leave_resolve_mailbox(v_key || '-none');
-    ASSERT v_count = 0, '1: leave_resolve_mailbox が、在るはずのない行を返した';
-
     -- leave_enabled_tenants (164): 有効な tenant だけが、tenant_id 順に返る
     SELECT array_agg(t.tenant_id ORDER BY t.tenant_id) INTO v_tenants
       FROM alc_api.leave_enabled_tenants() t WHERE t.tenant_id IN (v_tenant_a, v_tenant_b);
     ASSERT v_tenants = ARRAY[v_tenant_a], '1: leave_enabled_tenants が有効な tenant だけを返していない';
 
-    RAISE NOTICE 'ok 1: 認証前・テナント横断の関数 11 本を、alc_api_rt が tenant context 無しで呼べる';
+    RAISE NOTICE 'ok 1: 認証前・テナント横断の関数 10 本を、alc_api_rt が tenant context 無しで呼べる';
 END
 $$;
 
@@ -261,7 +247,6 @@ BEGIN
         'alc_api.list_dev_device_tenant_ids()',
         'alc_api.list_tenko_overdue_webhook_configs()',
         'alc_api.create_access_request(uuid, uuid)',
-        'alc_api.leave_resolve_mailbox(text)',
         'alc_api.leave_enabled_tenants()',
         'alc_api.migration_status()'
     ] LOOP

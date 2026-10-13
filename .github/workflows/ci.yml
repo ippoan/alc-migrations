@@ -542,6 +542,32 @@ jobs:
           printf '%s\n' "$got" | grep -qx 'lookup-none | 0'
           printf '%s\n' "$got" | grep -qx 'after-delete | 0'
 
+      # SSO 設定の引き当て (migration 174): external_org_id の完全一致が先で、見つからなければ tenants.slug で
+      # 引き直すこと。実行用ロールから呼べて、無効な設定は返さないこと。1 transaction で流して ROLLBACK する
+      - name: resolve_sso_config (完全一致と slug の引き直し)
+        run: |
+          got=$(psql -v ON_ERROR_STOP=1 -q -At -F ' | ' \
+            -c 'BEGIN' \
+            -c "INSERT INTO alc_api.tenants (name, slug) VALUES ('ci sso', 'ci-sso-slug')" \
+            -c "INSERT INTO alc_api.sso_provider_configs (tenant_id, provider, client_id, client_secret_encrypted, external_org_id, enabled) SELECT id, 'ci-provider', 'ci-client', repeat('a', 8), 'ci-org', true FROM alc_api.tenants WHERE slug = 'ci-sso-slug'" \
+            -c 'SET LOCAL ROLE alc_api_rt' \
+            -c "CREATE TEMP TABLE ci_by_org ON COMMIT DROP AS SELECT * FROM alc_api.resolve_sso_config('ci-provider', 'ci-org')" \
+            -c "CREATE TEMP TABLE ci_by_slug ON COMMIT DROP AS SELECT * FROM alc_api.resolve_sso_config('ci-provider', 'ci-sso-slug')" \
+            -c "SELECT 'none', count(*) FROM alc_api.resolve_sso_config('ci-provider', 'ci-nothing')" \
+            -c "SELECT 'other-provider', count(*) FROM alc_api.resolve_sso_config('ci-other', 'ci-sso-slug')" \
+            -c 'RESET ROLE' \
+            -c "SELECT 'by-org', count(*), bool_and(o.tenant_id = t.id) FROM ci_by_org o JOIN alc_api.tenants t ON t.slug = 'ci-sso-slug'" \
+            -c "SELECT 'by-slug', count(*), bool_and(s.tenant_id = t.id AND s.external_org_id = 'ci-org') FROM ci_by_slug s JOIN alc_api.tenants t ON t.slug = 'ci-sso-slug'" \
+            -c "UPDATE alc_api.sso_provider_configs SET enabled = false WHERE provider = 'ci-provider'" \
+            -c "SELECT 'disabled', count(*) FROM alc_api.resolve_sso_config('ci-provider', 'ci-sso-slug')" \
+            -c 'ROLLBACK')
+          echo "$got"
+          printf '%s\n' "$got" | grep -qx 'by-org | 1 | t'
+          printf '%s\n' "$got" | grep -qx 'by-slug | 1 | t'
+          printf '%s\n' "$got" | grep -qx 'none | 0'
+          printf '%s\n' "$got" | grep -qx 'other-provider | 0'
+          printf '%s\n' "$got" | grep -qx 'disabled | 0'
+
   # migration SQL を足した PR だけ走る。警告とラベルだけで止めない
   safety:
     name: safety

@@ -14,8 +14,7 @@
 --     (本番へ届くのは migration だけ。付け忘れは tests/app_role_grants_test.rs が落とす)
 --   * 冪等 (何度流しても同じ結果)。本番にしか無い対象 (ローカルに無い表・関数・sequence) は
 --     存在確認して飛ばし、NOTICE に名前を出す
---   * 関数は型だけで引く (GRANT は引数名を見ない。init_local_db.sql の resolve_sso_config は
---     引数名が本番と違う)
+--   * 関数は型だけで引く (GRANT は引数名を見ない)
 
 DO $grants$
 DECLARE

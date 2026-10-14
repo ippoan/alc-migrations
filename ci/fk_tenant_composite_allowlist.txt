@@ -12,6 +12,7 @@
 # 並びは検査の出力と同じ (子の表・制約名の順)。gate が比べるのは先頭の 4 項目だけ。# で始まる行と空行は読まない。
 access_requests | user_id | users | access_requests_user_id_fkey | cross-tenant | 別のテナントの利用者が、このテナントへの参加を申請する行 (create_access_request)。利用者は申請先とは別のテナントに属する
 device_registration_requests | device_id | devices | device_registration_requests_device_id_fkey | nullable-tenant | 子の tenant_id が NULL 可 (NULL の行は複合の外部キーでは参照の検査ごと消える)。ON DELETE SET NULL
+leave_link_rows | page_id | leave_pages | leave_link_rows_page_id_fkey | policy | 176 の WITH CHECK が親の tenant_id の一致を確かめる
 leave_periods | page_id | leave_pages | leave_periods_page_id_fkey | policy | 170 の WITH CHECK が親の tenant_id の一致を確かめる
 leave_settings | lineworks_channel_id | lineworks_channels | leave_settings_lineworks_channel_id_fkey | policy | 170 の WITH CHECK が親の tenant_id の一致を確かめる。ON DELETE SET NULL (複合にするときは SET NULL (<列>) にする)
 leave_settings | notify_bot_config_id | bot_configs | leave_settings_notify_bot_config_id_fkey | policy | 170 の WITH CHECK が親の tenant_id の一致を確かめる。ON DELETE SET NULL (複合にするときは SET NULL (<列>) にする)

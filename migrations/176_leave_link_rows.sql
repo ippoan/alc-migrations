@@ -36,3 +36,7 @@ CREATE POLICY leave_link_rows_tenant ON alc_api.leave_link_rows
         )
     );
 GRANT SELECT, INSERT, DELETE ON alc_api.leave_link_rows TO alc_api_app;
+
+-- PDF の基準日 (一番星の候補を探す中心の日)。PDF 1 本 = 同じ r2_key のページ群で同じ値を持つ。NULL は受信日を使う。
+-- leave_pages の UPDATE は 163 の GRANT で付いているので GRANT は足さない。
+ALTER TABLE alc_api.leave_pages ADD COLUMN base_date DATE NULL;

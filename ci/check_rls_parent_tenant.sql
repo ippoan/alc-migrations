@@ -163,6 +163,8 @@ INSERT INTO chk_pt_cases (name, parent, stmt) VALUES
      'UPDATE alc_api.leave_settings SET lineworks_channel_id = NULL, notify_recipient_id = {P}, notify_bot_config_id = NULL WHERE tenant_id = {tenant}'),
     ('leave_settings.notify_bot_config_id', 'bot_config',
      'UPDATE alc_api.leave_settings SET lineworks_channel_id = NULL, notify_recipient_id = NULL, notify_bot_config_id = {P} WHERE tenant_id = {tenant}'),
+    ('user_roles.user_id (INSERT)', 'user',
+     'INSERT INTO alc_api.user_roles (tenant_id, user_id, role) VALUES ({tenant}, {P}, ''leave'')'),
     ('leave_link_rows.page_id (INSERT)', 'leave_page',
      'INSERT INTO alc_api.leave_link_rows (tenant_id, page_id, row_id, employee_cd, day, item_name) VALUES ({tenant}, {P}, md5(gen_random_uuid()::text), ''ci'', current_date, ''ci'')'),
     ('leave_periods.page_id (INSERT)', 'leave_page',

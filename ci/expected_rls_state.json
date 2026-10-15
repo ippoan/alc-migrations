@@ -295,6 +295,9 @@
     "trouble_workflow_transitions": [
       "tenant_isolation"
     ],
+    "user_roles": [
+      "user_roles_tenant"
+    ],
     "users": [
       "tenant_isolation_users"
     ],
@@ -519,7 +522,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 94,
+  "table_count": 95,
   "tables": [
     {
       "count": 19,
@@ -1615,6 +1618,32 @@
       ],
       "rls_enabled": true,
       "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "user_roles"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
+          "with_check": "((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid) AND (EXISTS ( SELECT 1\n   FROM users u\n  WHERE ((u.id = user_roles.user_id) AND (u.tenant_id = user_roles.tenant_id)))))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
       "runtime_role_can_act_as_owner": false,
       "runtime_role_privileges": [
         "SELECT",

@@ -31,3 +31,4 @@ trouble_tickets | person_id | employees | trouble_tickets_person_id_fkey | polic
 trouble_tickets | status_id | trouble_workflow_states | trouble_tickets_status_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
 trouble_workflow_transitions | from_state_id | trouble_workflow_states | trouble_workflow_transitions_from_state_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
 trouble_workflow_transitions | to_state_id | trouble_workflow_states | trouble_workflow_transitions_to_state_id_fkey | policy | 169 の WITH CHECK が親の tenant_id の一致を確かめる
+user_roles | user_id | users | user_roles_user_id_fkey | policy | 177 の WITH CHECK が親の tenant_id の一致を確かめる

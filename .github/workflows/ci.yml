@@ -93,7 +93,7 @@ jobs:
         run: |
           got=$(cargo run -q --features cli --bin alc-migrate -- --status)
           printf '%s\n' "$got" | tail -n 3
-          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 176"
+          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 177"
           if cargo run -q --features cli --bin alc-migrate -- --check >/dev/null; then
             echo "--check は未適用が在れば exit 1 のはず"
             exit 1
@@ -115,7 +115,7 @@ jobs:
             got=$(psql -At -F ' | ' -c "SELECT count(*), max(version) FROM alc_api._sqlx_migrations")
           fi
           echo "$got"
-          test "$got" = "176 | 177"
+          test "$got" = "177 | 178"
       - name: table owner
         run: |
           got=$(psql -At -c "SELECT DISTINCT relowner::regrole FROM pg_class WHERE relnamespace = 'alc_api'::regnamespace AND relkind IN ('r', 'p')")
@@ -370,6 +370,9 @@ jobs:
       # 表への直接の問い合わせには RLS が掛かること、適用履歴は関数 (160) からだけ読めること
       - name: check runtime role (158・160)
         run: psql -v ON_ERROR_STOP=1 -f ci/check_runtime_role.sql
+      # notify_recipients の provider に 'email' が入り、ID もメールも無い 'email' の行と provider 'sms' は弾かれること (178)
+      - name: check notify_recipients email provider (178)
+        run: psql -v ON_ERROR_STOP=1 -f ci/check_notify_recipients_email.sql
       # テナント分離のポリシーが、実行用ロール alc_api_rt に対して実際の行を止めること。tenant_id を持つ表を
       # カタログから全部引き (表を列挙しない)、テナント 2 つの行を入れて、a. 未設定では読めない /
       # b. 別のテナントの行が見えず自分の行は見える / c. 別のテナントの tenant_id での INSERT が 42501、を確かめる。

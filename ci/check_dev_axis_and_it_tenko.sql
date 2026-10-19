@@ -1,4 +1,4 @@
--- CI の replay job 専用の検査 (migration 153〜157)。crate には含めない (scripts/ ではなく ci/ に置く)。
+-- CI の replay job 専用の検査 (migration 153〜157、179)。crate には含めない (scripts/ ではなく ci/ に置く)。
 --
 -- init → 全 migration → grants を流した後の DB に対して、アプリのロールで
 -- 「dev の軸」(is_dev 列 + RLS + set_current_tenant) と 'IT点呼' を確かめる。
@@ -56,9 +56,10 @@ SELECT set_config('chk.employee_id', e.id::TEXT, false),
 CREATE SCHEMA chk;
 GRANT USAGE ON SCHEMA chk TO :"app_role";
 
--- 8 表の「いまの接続から見える行数」。SECURITY INVOKER なので呼んだロールの RLS が効く。
+-- 9 表の「いまの接続から見える行数」。SECURITY INVOKER なので呼んだロールの RLS が効く。
 -- 順番: tenko_schedules, measurements, tenko_sessions, tenko_records,
---       tenko_carrying_item_checks, hub_measurements, webhook_deliveries, equipment_failures
+--       tenko_carrying_item_checks, hub_measurements, webhook_deliveries, equipment_failures,
+--       vein_templates (migration 179)
 CREATE FUNCTION chk.visible() RETURNS INT[]
 LANGUAGE sql AS $$
     SELECT ARRAY[
@@ -69,11 +70,12 @@ LANGUAGE sql AS $$
         (SELECT count(*) FROM alc_api.tenko_carrying_item_checks),
         (SELECT count(*) FROM alc_api.hub_measurements),
         (SELECT count(*) FROM alc_api.webhook_deliveries),
-        (SELECT count(*) FROM alc_api.equipment_failures)
+        (SELECT count(*) FROM alc_api.equipment_failures),
+        (SELECT count(*) FROM alc_api.vein_templates)
     ]::INT[];
 $$;
 
--- 8 表に 1 行ずつ、is_dev を指定せずに INSERT する (backend と同じ書き方)。
+-- 9 表に 1 行ずつ、is_dev を指定せずに INSERT する (backend と同じ書き方)。
 -- 入った行の is_dev を chk.visible() と同じ順で返す。p_seq は hub_measurements の seq。
 CREATE FUNCTION chk.insert_all(p_seq BIGINT) RETURNS BOOLEAN[]
 LANGUAGE plpgsql AS $$
@@ -81,6 +83,7 @@ DECLARE
     v_tenant   CONSTANT UUID := current_setting('chk.tenant_id')::UUID;
     v_employee CONSTANT UUID := current_setting('chk.employee_id')::UUID;
     v_session  UUID;
+    v_vein_employee UUID;
     v          BOOLEAN;
     v_out      BOOLEAN[] := '{}';
 BEGIN
@@ -127,11 +130,21 @@ BEGIN
     RETURNING is_dev INTO v;
     v_out := v_out || v;
 
+    -- vein_templates: 151 の UNIQUE (tenant_id, employee_id) が残っているので、呼ぶたびに別の乗務員を作る
+    -- (同じ乗務員の dev と本番の両立は、2 列 unique を落とす後続の migration の後)
+    INSERT INTO alc_api.employees (tenant_id, name)
+    VALUES (v_tenant, 'ci check vein')
+    RETURNING id INTO v_vein_employee;
+    INSERT INTO alc_api.vein_templates (tenant_id, employee_id, template)
+    VALUES (v_tenant, v_vein_employee, 'ci check')
+    RETURNING is_dev INTO v;
+    v_out := v_out || v;
+
     RETURN v_out;
 END
 $$;
 
--- 8 表それぞれに is_dev を明示して INSERT し、全部が RLS (42501) で拒否されることを確かめる。
+-- 9 表それぞれに is_dev を明示して INSERT し、全部が RLS (42501) で拒否されることを確かめる。
 -- 1 表でも通ったら例外。
 CREATE FUNCTION chk.expect_explicit_insert_rejected(p_is_dev BOOLEAN) RETURNS VOID
 LANGUAGE plpgsql AS $$
@@ -165,7 +178,9 @@ BEGIN
                   VALUES (%L, %L, 'equipment_failure', '{}', %L)$q$,
                v_tenant, current_setting('chk.webhook_config_id'), p_is_dev),
         format($q$INSERT INTO alc_api.equipment_failures (tenant_id, failure_type, description, is_dev)
-                  VALUES (%L, 'manual_report', 'ci check', %L)$q$, v_tenant, p_is_dev)
+                  VALUES (%L, 'manual_report', 'ci check', %L)$q$, v_tenant, p_is_dev),
+        format($q$INSERT INTO alc_api.vein_templates (tenant_id, employee_id, template, is_dev)
+                  VALUES (%L, %L, 'ci check', %L)$q$, v_tenant, v_employee, p_is_dev)
     ] LOOP
         BEGIN
             EXECUTE v_sql;
@@ -177,7 +192,7 @@ BEGIN
 END
 $$;
 
--- 8 表それぞれで、いま見えている行の is_dev を p_to へ書き換える UPDATE が、全部 RLS (42501) で
+-- 9 表それぞれで、いま見えている行の is_dev を p_to へ書き換える UPDATE が、全部 RLS (42501) で
 -- 拒否されることを確かめる。1 表でも通ったら (0 行で空振りした場合も) 例外。
 CREATE FUNCTION chk.expect_axis_update_rejected(p_to BOOLEAN) RETURNS VOID
 LANGUAGE plpgsql AS $$
@@ -186,7 +201,8 @@ DECLARE
 BEGIN
     FOREACH v_tbl IN ARRAY ARRAY[
         'tenko_schedules', 'measurements', 'tenko_sessions', 'tenko_records',
-        'tenko_carrying_item_checks', 'hub_measurements', 'webhook_deliveries', 'equipment_failures'
+        'tenko_carrying_item_checks', 'hub_measurements', 'webhook_deliveries', 'equipment_failures',
+        'vein_templates'
     ] LOOP
         BEGIN
             IF v_tbl = 'tenko_records' THEN
@@ -223,11 +239,11 @@ BEGIN
         '0: 新しい接続なのに app.device_dev が設定済み';
     PERFORM set_config('app.current_tenant_id', current_setting('chk.tenant_id'), false);
 
-    ASSERT chk.insert_all(1) = ARRAY[false, false, false, false, false, false, false, false],
+    ASSERT chk.insert_all(1) = ARRAY[false, false, false, false, false, false, false, false, false],
         '0: 未設定の接続で書いた行が is_dev = false になっていない';
-    ASSERT chk.visible() = ARRAY[1, 1, 1, 1, 1, 1, 1, 1],
+    ASSERT chk.visible() = ARRAY[1, 1, 1, 1, 1, 1, 1, 1, 1],
         format('0: 未設定の接続から自分の行が見えない: %s', chk.visible());
-    RAISE NOTICE 'ok 0: app.device_dev が未設定の接続は dev でない (8 表)';
+    RAISE NOTICE 'ok 0: app.device_dev が未設定の接続は dev でない (9 表)';
 END
 $$;
 
@@ -238,11 +254,11 @@ BEGIN
     ASSERT current_setting('app.device_dev', true) = '',
         format('1: set_current_tenant の後の app.device_dev が空文字でない: %L', current_setting('app.device_dev', true));
 
-    ASSERT chk.insert_all(2) = ARRAY[false, false, false, false, false, false, false, false],
+    ASSERT chk.insert_all(2) = ARRAY[false, false, false, false, false, false, false, false, false],
         '1: dev でない接続で書いた行が is_dev = false になっていない';
-    ASSERT chk.visible() = ARRAY[2, 2, 2, 2, 2, 2, 2, 2],
+    ASSERT chk.visible() = ARRAY[2, 2, 2, 2, 2, 2, 2, 2, 2],
         format('1: dev でない接続から見える行数が違う: %s', chk.visible());
-    RAISE NOTICE 'ok 1: set_current_tenant だけの接続は is_dev = false で書き、その行が見える (8 表)';
+    RAISE NOTICE 'ok 1: set_current_tenant だけの接続は is_dev = false で書き、その行が見える (9 表)';
 END
 $$;
 
@@ -251,13 +267,13 @@ DO $$
 BEGIN
     PERFORM set_config('app.device_dev', '1', false);
 
-    ASSERT chk.visible() = ARRAY[0, 0, 0, 0, 0, 0, 0, 0],
+    ASSERT chk.visible() = ARRAY[0, 0, 0, 0, 0, 0, 0, 0, 0],
         format('2: dev の接続から本番の行が見えている: %s', chk.visible());
-    ASSERT chk.insert_all(3) = ARRAY[true, true, true, true, true, true, true, true],
+    ASSERT chk.insert_all(3) = ARRAY[true, true, true, true, true, true, true, true, true],
         '2: dev の接続で書いた行が is_dev = true になっていない';
-    ASSERT chk.visible() = ARRAY[1, 1, 1, 1, 1, 1, 1, 1],
+    ASSERT chk.visible() = ARRAY[1, 1, 1, 1, 1, 1, 1, 1, 1],
         format('2: dev の接続から見える行数が違う: %s', chk.visible());
-    RAISE NOTICE 'ok 2: dev の接続は is_dev = true で書き、dev の行だけが見える (8 表)';
+    RAISE NOTICE 'ok 2: dev の接続は is_dev = true で書き、dev の行だけが見える (9 表)';
 END
 $$;
 
@@ -296,12 +312,12 @@ BEGIN
 END
 $$;
 
--- 4a. dev の接続から is_dev = false を明示した INSERT / UPDATE は拒否される (8 表)。
+-- 4a. dev の接続から is_dev = false を明示した INSERT / UPDATE は拒否される (9 表)。
 DO $$
 BEGIN
     PERFORM chk.expect_explicit_insert_rejected(false);
     PERFORM chk.expect_axis_update_rejected(false);
-    RAISE NOTICE 'ok 4a: dev の接続からの is_dev = false の明示は RLS で拒否 (INSERT 8 表 + UPDATE 8 表)';
+    RAISE NOTICE 'ok 4a: dev の接続からの is_dev = false の明示は RLS で拒否 (INSERT 9 表 + UPDATE 9 表)';
 END
 $$;
 
@@ -311,9 +327,9 @@ BEGIN
     PERFORM alc_api.set_current_tenant(current_setting('chk.tenant_id'));
     ASSERT current_setting('app.device_dev', true) = '',
         format('3: set_current_tenant が app.device_dev を消していない: %L', current_setting('app.device_dev', true));
-    ASSERT chk.visible() = ARRAY[2, 2, 2, 2, 2, 2, 2, 2],
+    ASSERT chk.visible() = ARRAY[2, 2, 2, 2, 2, 2, 2, 2, 2],
         format('3: dev でない接続へ戻した後に見える行数が違う: %s', chk.visible());
-    RAISE NOTICE 'ok 3: set_current_tenant は app.device_dev を消し、dev の行は見えなくなる (8 表)';
+    RAISE NOTICE 'ok 3: set_current_tenant は app.device_dev を消し、dev の行は見えなくなる (9 表)';
 END
 $$;
 
@@ -340,12 +356,12 @@ BEGIN
 END
 $$;
 
--- 4b. dev でない接続から is_dev = true を明示した INSERT / UPDATE は拒否される (8 表)。
+-- 4b. dev でない接続から is_dev = true を明示した INSERT / UPDATE は拒否される (9 表)。
 DO $$
 BEGIN
     PERFORM chk.expect_explicit_insert_rejected(true);
     PERFORM chk.expect_axis_update_rejected(true);
-    RAISE NOTICE 'ok 4b: dev でない接続からの is_dev = true の明示は RLS で拒否 (INSERT 8 表 + UPDATE 8 表)';
+    RAISE NOTICE 'ok 4b: dev でない接続からの is_dev = true の明示は RLS で拒否 (INSERT 9 表 + UPDATE 9 表)';
 END
 $$;
 
@@ -488,12 +504,12 @@ $$;
 DO $$
 BEGIN
     PERFORM alc_api.set_current_tenant(gen_random_uuid()::TEXT);
-    ASSERT chk.visible() = ARRAY[0, 0, 0, 0, 0, 0, 0, 0],
+    ASSERT chk.visible() = ARRAY[0, 0, 0, 0, 0, 0, 0, 0, 0],
         format('8: 別テナントの本番の接続から行が見えている: %s', chk.visible());
     PERFORM set_config('app.device_dev', '1', false);
-    ASSERT chk.visible() = ARRAY[0, 0, 0, 0, 0, 0, 0, 0],
+    ASSERT chk.visible() = ARRAY[0, 0, 0, 0, 0, 0, 0, 0, 0],
         format('8: 別テナントの dev の接続から行が見えている: %s', chk.visible());
-    RAISE NOTICE 'ok 8: 別のテナントからは dev でも本番でも見えない (8 表)';
+    RAISE NOTICE 'ok 8: 別のテナントからは dev でも本番でも見えない (9 表)';
 END
 $$;
 
@@ -548,23 +564,43 @@ BEGIN
 END
 $$;
 
+-- 11. vein_templates (migration 179): 3 列の unique index が在り、151 の 2 列 UNIQUE も残っている
+--     (旧 alc-vein-worker が ON CONFLICT (tenant_id, employee_id) で推論するため。落とすのは worker 切替後の別 migration)。
+DO $$
+BEGIN
+    ASSERT EXISTS (
+        SELECT 1 FROM pg_indexes
+         WHERE schemaname = 'alc_api' AND tablename = 'vein_templates'
+           AND indexname = 'vein_templates_tenant_employee_is_dev'
+    ), '11: vein_templates の 3 列 unique index が無い';
+    ASSERT EXISTS (
+        SELECT 1 FROM pg_constraint c
+         WHERE c.conrelid = 'alc_api.vein_templates'::regclass AND c.contype = 'u'
+           AND (SELECT array_agg(a.attname::TEXT ORDER BY a.attname) FROM pg_attribute a
+                 WHERE a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)) = ARRAY['employee_id', 'tenant_id']
+    ), '11: vein_templates の 2 列 UNIQUE (151) が消えている (worker 切替前に落としてはいけない)';
+    RAISE NOTICE 'ok 11: vein_templates は 3 列 unique index を足し、2 列 UNIQUE も残している';
+END
+$$;
+
 RESET ROLE;
 
 -- 10. 表の所有者の接続では、dev の行もほかのテナントの行も見えてしまう (owner_role を渡した軸だけ)。
 --     PostgreSQL は FORCE ROW LEVEL SECURITY の無い表では所有者にポリシーを適用しない。
---     本番で migration を流すロールは表の所有者なので、そのロールで繋ぐと 8 表の分離は効かない
+--     本番で migration を流すロールは表の所有者なので、そのロールで繋ぐと 9 表の分離は効かない
 --     (だから backend は所有者でない alc_api_rt で繋ぐ)。
---     これは「いまの状態の記録」。8 表に FORCE を足したら、所有者にもポリシーが掛かるので、
+--     これは「いまの状態の記録」。9 表に FORCE を足したら、所有者にもポリシーが掛かるので、
 --     この検査を「所有者からも見えない」に直すこと。
 \if :{?owner_role}
     SELECT count(*) > 0 AS not_owned
       FROM pg_class c
      WHERE c.relnamespace = 'alc_api'::regnamespace
        AND c.relname IN ('tenko_schedules', 'measurements', 'tenko_sessions', 'tenko_records',
-                         'tenko_carrying_item_checks', 'hub_measurements', 'webhook_deliveries', 'equipment_failures')
+                         'tenko_carrying_item_checks', 'hub_measurements', 'webhook_deliveries', 'equipment_failures',
+                         'vein_templates')
        AND c.relowner <> :'owner_role'::regrole \gset chk_
     \if :chk_not_owned
-        \echo '10: owner_role に渡したロールが 8 表の所有者でない (軸の準備が違う)'
+        \echo '10: owner_role に渡したロールが 9 表の所有者でない (軸の準備が違う)'
         SELECT 1 / 0;
     \endif
 
@@ -584,12 +620,13 @@ RESET ROLE;
             (SELECT count(*) FROM alc_api.tenko_carrying_item_checks WHERE is_dev),
             (SELECT count(*) FROM alc_api.hub_measurements WHERE is_dev),
             (SELECT count(*) FROM alc_api.webhook_deliveries WHERE is_dev),
-            (SELECT count(*) FROM alc_api.equipment_failures WHERE is_dev)
+            (SELECT count(*) FROM alc_api.equipment_failures WHERE is_dev),
+            (SELECT count(*) FROM alc_api.vein_templates WHERE is_dev)
         ]::INT[] INTO v_dev;
 
         ASSERT 0 <> ALL (v_dev),
             format('10: 表の所有者の接続から dev の行が見えない表が在る (FORCE を足したなら、この検査を直す): %s', v_dev);
-        RAISE NOTICE 'ok 10: 表の所有者の接続では、別テナント・dev でない接続でも dev の行が見える (8 表。FORCE が無いため): %', v_dev;
+        RAISE NOTICE 'ok 10: 表の所有者の接続では、別テナント・dev でない接続でも dev の行が見える (9 表。FORCE が無いため): %', v_dev;
     END
     $$;
     RESET ROLE;

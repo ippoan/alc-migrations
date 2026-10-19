@@ -525,50 +525,6 @@
   "table_count": 95,
   "tables": [
     {
-      "count": 19,
-      "names": [
-        "carrying_items",
-        "communication_items",
-        "devices",
-        "dtako_daily_work_hours",
-        "dtako_daily_work_segments",
-        "dtako_event_classifications",
-        "dtako_offices",
-        "dtako_operation_changes",
-        "dtako_operations",
-        "dtako_scrape_history",
-        "dtako_upload_history",
-        "dtako_vehicles",
-        "employee_health_baselines",
-        "employees",
-        "guidance_records",
-        "timecard_cards",
-        "users",
-        "vein_templates",
-        "webhook_configs"
-      ],
-      "policies": [
-        {
-          "command": "ALL",
-          "permissive": true,
-          "roles": [
-            "public"
-          ],
-          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
-          "with_check": null
-        }
-      ],
-      "rls_enabled": true,
-      "rls_forced": false,
-      "runtime_role_can_act_as_owner": false,
-      "runtime_role_privileges": [
-        "SELECT",
-        "INSERT",
-        "UPDATE",
-        "DELETE"
-      ]
-    },
-    {
       "count": 18,
       "names": [
         "api_tokens",
@@ -599,6 +555,49 @@
           ],
           "using": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)",
           "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid)"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 18,
+      "names": [
+        "carrying_items",
+        "communication_items",
+        "devices",
+        "dtako_daily_work_hours",
+        "dtako_daily_work_segments",
+        "dtako_event_classifications",
+        "dtako_offices",
+        "dtako_operation_changes",
+        "dtako_operations",
+        "dtako_scrape_history",
+        "dtako_upload_history",
+        "dtako_vehicles",
+        "employee_health_baselines",
+        "employees",
+        "guidance_records",
+        "timecard_cards",
+        "users",
+        "webhook_configs"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
+          "with_check": null
         }
       ],
       "rls_enabled": true,
@@ -650,7 +649,7 @@
       ]
     },
     {
-      "count": 7,
+      "count": 8,
       "names": [
         "equipment_failures",
         "hub_measurements",
@@ -658,6 +657,7 @@
         "tenko_records",
         "tenko_schedules",
         "tenko_sessions",
+        "vein_templates",
         "webhook_deliveries"
       ],
       "policies": [

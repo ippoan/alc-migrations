@@ -437,6 +437,12 @@
       "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
+      "signature": "list_pending_tenko(interval)"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
       "signature": "list_tenko_overdue_webhook_configs()"
     },
     {

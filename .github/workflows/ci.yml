@@ -93,7 +93,7 @@ jobs:
         run: |
           got=$(cargo run -q --features cli --bin alc-migrate -- --status)
           printf '%s\n' "$got" | tail -n 3
-          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 180"
+          test "$(printf '%s\n' "$got" | tail -n 1)" = "pending: 181"
           if cargo run -q --features cli --bin alc-migrate -- --check >/dev/null; then
             echo "--check は未適用が在れば exit 1 のはず"
             exit 1

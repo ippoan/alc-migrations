@@ -245,6 +245,7 @@ BEGIN
         'alc_api.list_fcm_devices()',
         'alc_api.list_all_callable_devices()',
         'alc_api.list_dev_device_tenant_ids()',
+        'alc_api.list_cam_recording_tenant_ids()',
         'alc_api.list_tenko_overdue_webhook_configs()',
         'alc_api.create_access_request(uuid, uuid)',
         'alc_api.leave_enabled_tenants()',

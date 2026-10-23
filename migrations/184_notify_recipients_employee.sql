@@ -12,8 +12,13 @@
 -- migration を失敗させる (理由は 154 の冒頭)。SET LOCAL なので、この migration の中だけに効く。
 SET LOCAL lock_timeout = '10s';
 
+-- 外部キーはテナントを含める (172 の規約。別テナントの社員に結び付けられないように)。
+-- 消したときに NULL にするのは employee_id だけ (tenant_id は残す)。
 ALTER TABLE alc_api.notify_recipients
-    ADD COLUMN employee_id UUID REFERENCES alc_api.employees(id) ON DELETE SET NULL;
+    ADD COLUMN employee_id UUID;
+ALTER TABLE alc_api.notify_recipients
+    ADD CONSTRAINT notify_recipients_employee_id_fkey FOREIGN KEY (tenant_id, employee_id)
+    REFERENCES alc_api.employees (tenant_id, id) ON DELETE SET NULL (employee_id);
 
 CREATE UNIQUE INDEX idx_notify_recipients_employee ON alc_api.notify_recipients(tenant_id, employee_id)
     WHERE employee_id IS NOT NULL;

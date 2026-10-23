@@ -15,6 +15,15 @@
     "bp_notify_settings": [
       "bp_notify_settings_tenant"
     ],
+    "cam_camera_devices": [
+      "cam_camera_devices_tenant"
+    ],
+    "cam_clip_events": [
+      "cam_clip_events_tenant"
+    ],
+    "cam_clips": [
+      "cam_clips_tenant"
+    ],
     "camera_health_logs": [
       "tenant_isolation"
     ],
@@ -305,6 +314,9 @@
       "tenant_isolation_users"
     ],
     "vehicle_settings_dumps": [],
+    "vein_enroll_events": [
+      "vein_enroll_events_tenant"
+    ],
     "vein_templates": [
       "tenant_isolation_vein_templates"
     ],
@@ -422,6 +434,12 @@
       "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
+      "signature": "list_cam_recording_tenant_ids()"
+    },
+    {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
       "signature": "list_dev_device_tenant_ids()"
     },
     {
@@ -531,7 +549,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 96,
+  "table_count": 100,
   "tables": [
     {
       "count": 18,
@@ -691,9 +709,11 @@
       ]
     },
     {
-      "count": 5,
+      "count": 7,
       "names": [
         "bp_notify_settings",
+        "cam_camera_devices",
+        "cam_clips",
         "leave_alerts",
         "leave_grants",
         "leave_opening",
@@ -767,6 +787,33 @@
       ],
       "rls_enabled": true,
       "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 2,
+      "names": [
+        "cam_clip_events",
+        "vein_enroll_events"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))",
+          "with_check": "((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
       "runtime_role_can_act_as_owner": false,
       "runtime_role_privileges": [
         "SELECT",

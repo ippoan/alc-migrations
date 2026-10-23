@@ -12,6 +12,9 @@
     "bot_configs": [
       "tenant_isolation"
     ],
+    "bp_notify_settings": [
+      "bp_notify_settings_tenant"
+    ],
     "camera_health_logs": [
       "tenant_isolation"
     ],
@@ -528,7 +531,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 95,
+  "table_count": 96,
   "tables": [
     {
       "count": 18,
@@ -688,8 +691,9 @@
       ]
     },
     {
-      "count": 4,
+      "count": 5,
       "names": [
+        "bp_notify_settings",
         "leave_alerts",
         "leave_grants",
         "leave_opening",

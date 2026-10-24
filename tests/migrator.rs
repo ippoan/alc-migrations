@@ -1,8 +1,8 @@
 use alc_migrations::MIGRATOR;
 
-/// 001〜189。133 は欠番 (rust-alc-api 03e0571 の時点で存在しない)。
+/// 001〜190。133 は欠番 (rust-alc-api 03e0571 の時点で存在しない)。
 fn expected_versions() -> Vec<i64> {
-    (1..=189).filter(|v| *v != 133).collect()
+    (1..=190).filter(|v| *v != 133).collect()
 }
 
 #[test]

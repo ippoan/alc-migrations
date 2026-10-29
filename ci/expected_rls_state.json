@@ -106,10 +106,6 @@
       "dtako_vehicles_tenant"
     ],
     "dtakologs": [
-      "archive_delete",
-      "archive_insert",
-      "archive_select",
-      "archive_update",
       "tenant_isolation"
     ],
     "dvr_notifications": [
@@ -331,36 +327,6 @@
     ]
   },
   "security_definer_functions": [
-    {
-      "public_can_execute": false,
-      "runtime_role_can_execute": false,
-      "search_path": "alc_api",
-      "signature": "archive_delete_dtako_date(text,text)"
-    },
-    {
-      "public_can_execute": false,
-      "runtime_role_can_execute": false,
-      "search_path": "alc_api",
-      "signature": "archive_fetch_dtako_rows_json(text,text,bigint,bigint)"
-    },
-    {
-      "public_can_execute": false,
-      "runtime_role_can_execute": false,
-      "search_path": "alc_api",
-      "signature": "archive_list_dtako_dates()"
-    },
-    {
-      "public_can_execute": false,
-      "runtime_role_can_execute": false,
-      "search_path": "alc_api",
-      "signature": "archive_list_old_dtako_dates(text)"
-    },
-    {
-      "public_can_execute": false,
-      "runtime_role_can_execute": false,
-      "search_path": "alc_api",
-      "signature": "archive_upsert_dtako_batch(jsonb)"
-    },
     {
       "public_can_execute": true,
       "runtime_role_can_execute": true,
@@ -635,7 +601,7 @@
       ]
     },
     {
-      "count": 13,
+      "count": 14,
       "names": [
         "bot_configs",
         "car_inspection",
@@ -645,6 +611,7 @@
         "car_inspection_files_a",
         "car_inspection_files_b",
         "car_inspection_nfc_tags",
+        "dtakologs",
         "file_access_logs",
         "files",
         "files_append",
@@ -1065,68 +1032,6 @@
             "public"
           ],
           "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
-          "with_check": null
-        }
-      ],
-      "rls_enabled": true,
-      "rls_forced": true,
-      "runtime_role_can_act_as_owner": false,
-      "runtime_role_privileges": [
-        "SELECT",
-        "INSERT",
-        "UPDATE",
-        "DELETE"
-      ]
-    },
-    {
-      "count": 1,
-      "names": [
-        "dtakologs"
-      ],
-      "policies": [
-        {
-          "command": "ALL",
-          "permissive": true,
-          "roles": [
-            "public"
-          ],
-          "using": "(tenant_id = COALESCE((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid, (NULLIF(current_setting('app.current_organization_id'::text, true), ''::text))::uuid))",
-          "with_check": "(tenant_id = COALESCE((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid, (NULLIF(current_setting('app.current_organization_id'::text, true), ''::text))::uuid))"
-        },
-        {
-          "command": "DELETE",
-          "permissive": true,
-          "roles": [
-            "alc_api_app"
-          ],
-          "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
-          "with_check": null
-        },
-        {
-          "command": "INSERT",
-          "permissive": true,
-          "roles": [
-            "alc_api_app"
-          ],
-          "using": null,
-          "with_check": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)"
-        },
-        {
-          "command": "SELECT",
-          "permissive": true,
-          "roles": [
-            "alc_api_app"
-          ],
-          "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
-          "with_check": null
-        },
-        {
-          "command": "UPDATE",
-          "permissive": true,
-          "roles": [
-            "alc_api_app"
-          ],
-          "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
           "with_check": null
         }
       ],

@@ -1,0 +1,13 @@
+-- LINE WORKS webhook の bot 引き当てが常に 0 行になる不具合の修正 (migration 118 と同じ型)
+--
+-- 102 の SECURITY DEFINER 関数 `lookup_bot_config_for_webhook(bot_id)` は、tenant が決まる前の
+-- webhook (auth-worker の LineworksWebhookDO → alc-notify の bot-secret / event の口) から呼ばれ、
+-- bot_id から tenant と bot_secret を引く。関数の所有者 (= 表の所有者、NOBYPASSRLS) で動くが、
+-- 049 で bot_configs に `FORCE ROW LEVEL SECURITY` が付いているため所有者にも RLS が掛かり、
+-- tenant 未設定 (nil) の文脈では行が見えず、bot が在っても `bot_not_found` になっていた。
+-- その結果、Bot をトークルームに招待しても lineworks_channels に行が作られない。
+--
+-- FORCE を外すと、所有者として動く SECURITY DEFINER 関数だけが RLS を通らずに引ける
+-- (= 認証前の引き当ての本来の意図)。実行用ロール (alc_api_rt。表の所有者ではなく、所有者の資格も取れない) には
+-- RLS が引き続き掛かるので、普段の tenant ごとの分離は変わらない (notify_line_configs の 118 と同じ)。
+ALTER TABLE alc_api.bot_configs NO FORCE ROW LEVEL SECURITY;

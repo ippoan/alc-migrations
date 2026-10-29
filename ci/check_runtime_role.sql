@@ -5,6 +5,7 @@
 --   * 適用履歴の件数と最大 version を関数 (160) で読める。_sqlx_migrations の直読みはできない
 --   * 同じ問い合わせを表へ直接打つと、RLS が掛かる (エラーか 0 行)
 --   * tenant_allowed_emails のポリシー (宛先を絞ってある) が alc_api_rt に効く
+--   * dtakologs の archive_mode のポリシーと archive_* 関数は alc_api_app だけのもの (192)
 -- ことを確かめる。alc_api_rt はどちらの軸 (表の所有者が postgres / alc_api_app) でも所有者でない。
 -- 全体を 1 transaction で流して最後に ROLLBACK するので、DB には何も残らない。
 -- id はその場で作る (実在の tenant_id / メールアドレスは書かない)。
@@ -274,5 +275,68 @@ BEGIN
     RAISE NOTICE 'ok 4: 関数 % 本は PUBLIC から呼べず、alc_api_app と alc_api_rt だけが呼べる', v_count;
 END
 $$;
+
+-- 5. dtakologs の archive (084・192)。archive_mode で全テナントの行を通す 4 本のポリシーは alc_api_app だけに効き、
+--    alc_api_rt は archive_mode を立てても別のテナントの行を読めず・書けず、archive_* 関数も呼べない。
+--    alc_api_app (rust-alc-api の archive Job) は従来どおり archive_mode で全テナントの行が見え、関数も呼べる。
+INSERT INTO alc_api.dtakologs (tenant_id, data_date_time, vehicle_cd)
+VALUES (current_setting('chk.tenant_a')::UUID, '2026-01-01T09:00:00+09:00', 1),
+       (current_setting('chk.tenant_b')::UUID, '2026-01-01T09:00:00+09:00', 1);
+
+SET ROLE alc_api_rt;
+DO $$
+DECLARE
+    v_a     UUID := current_setting('chk.tenant_a')::UUID;
+    v_b     UUID := current_setting('chk.tenant_b')::UUID;
+    v_count INT;
+BEGIN
+    ASSERT current_user = 'alc_api_rt', '5: alc_api_rt として流れていない';
+    PERFORM set_config('app.current_tenant_id', v_a::TEXT, true);
+    PERFORM set_config('alc_api.archive_mode', 'true', true);
+
+    SELECT count(*) INTO v_count FROM alc_api.dtakologs WHERE tenant_id = v_b;
+    ASSERT v_count = 0, format('5: archive_mode を立てた alc_api_rt に別のテナントの dtakologs が %s 行見える', v_count);
+    SELECT count(*) INTO v_count FROM alc_api.dtakologs WHERE tenant_id = v_a;
+    ASSERT v_count = 1, format('5: 自分のテナントの dtakologs が %s 行 (1 行のはず)', v_count);
+
+    BEGIN
+        INSERT INTO alc_api.dtakologs (tenant_id, data_date_time, vehicle_cd)
+        VALUES (v_b, '2026-01-02T09:00:00+09:00', 2);
+        ASSERT false, '5: archive_mode を立てた alc_api_rt が別のテナントの dtakologs を INSERT できた';
+    EXCEPTION WHEN insufficient_privilege THEN
+        NULL;
+    END;
+
+    BEGIN
+        PERFORM alc_api.archive_list_dtako_dates();
+        ASSERT false, '5: alc_api_rt が archive_list_dtako_dates を呼べた';
+    EXCEPTION WHEN insufficient_privilege THEN
+        NULL;
+    END;
+
+    RAISE NOTICE 'ok 5: alc_api_rt は archive_mode を立てても別のテナントの dtakologs を読み書きできず、archive_* も呼べない';
+END
+$$;
+RESET ROLE;
+
+SET ROLE alc_api_app;
+DO $$
+DECLARE
+    v_b     UUID := current_setting('chk.tenant_b')::UUID;
+    v_count INT;
+BEGIN
+    ASSERT current_user = 'alc_api_app', '5: alc_api_app として流れていない';
+    -- テナントは a のまま。b の行が見えるのは archive_mode のポリシーだけによる
+    PERFORM set_config('alc_api.archive_mode', 'true', true);
+    SELECT count(*) INTO v_count FROM alc_api.dtakologs WHERE tenant_id = v_b;
+    ASSERT v_count = 1, format('5: archive_mode を立てた alc_api_app に別のテナントの dtakologs が %s 行 (1 行のはず)', v_count);
+    PERFORM set_config('alc_api.archive_mode', '', true);
+    SELECT count(*) INTO v_count
+      FROM alc_api.archive_list_dtako_dates() d WHERE d.tenant_id = v_b::TEXT;
+    ASSERT v_count = 1, format('5: alc_api_app の archive_list_dtako_dates に別のテナントの日が %s 件 (1 件のはず)', v_count);
+    RAISE NOTICE 'ok 5: alc_api_app (archive Job) は archive_mode で全テナントの dtakologs が見え、archive_* を呼べる';
+END
+$$;
+RESET ROLE;
 
 ROLLBACK;

@@ -333,31 +333,31 @@
   "security_definer_functions": [
     {
       "public_can_execute": false,
-      "runtime_role_can_execute": true,
+      "runtime_role_can_execute": false,
       "search_path": "alc_api",
       "signature": "archive_delete_dtako_date(text,text)"
     },
     {
       "public_can_execute": false,
-      "runtime_role_can_execute": true,
+      "runtime_role_can_execute": false,
       "search_path": "alc_api",
       "signature": "archive_fetch_dtako_rows_json(text,text,bigint,bigint)"
     },
     {
       "public_can_execute": false,
-      "runtime_role_can_execute": true,
+      "runtime_role_can_execute": false,
       "search_path": "alc_api",
       "signature": "archive_list_dtako_dates()"
     },
     {
       "public_can_execute": false,
-      "runtime_role_can_execute": true,
+      "runtime_role_can_execute": false,
       "search_path": "alc_api",
       "signature": "archive_list_old_dtako_dates(text)"
     },
     {
       "public_can_execute": false,
-      "runtime_role_can_execute": true,
+      "runtime_role_can_execute": false,
       "search_path": "alc_api",
       "signature": "archive_upsert_dtako_batch(jsonb)"
     },
@@ -1129,7 +1129,7 @@
           "command": "DELETE",
           "permissive": true,
           "roles": [
-            "public"
+            "alc_api_app"
           ],
           "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
           "with_check": null
@@ -1138,7 +1138,7 @@
           "command": "INSERT",
           "permissive": true,
           "roles": [
-            "public"
+            "alc_api_app"
           ],
           "using": null,
           "with_check": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)"
@@ -1147,7 +1147,7 @@
           "command": "SELECT",
           "permissive": true,
           "roles": [
-            "public"
+            "alc_api_app"
           ],
           "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
           "with_check": null
@@ -1156,7 +1156,7 @@
           "command": "UPDATE",
           "permissive": true,
           "roles": [
-            "public"
+            "alc_api_app"
           ],
           "using": "(current_setting('alc_api.archive_mode'::text, true) = 'true'::text)",
           "with_check": null

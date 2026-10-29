@@ -132,7 +132,6 @@ BEGIN
         'get_device_settings_by_id(uuid)',
         'get_trouble_schedule(uuid)',
         'list_enabled_line_configs()',
-        'lookup_bot_config_for_webhook(text)',
         'lookup_delivery_for_view(uuid)',
         'lookup_device_tenant(uuid)',
         'lookup_lineworks_channel_for_send(uuid)',

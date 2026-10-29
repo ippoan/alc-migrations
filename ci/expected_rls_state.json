@@ -332,31 +332,31 @@
   },
   "security_definer_functions": [
     {
-      "public_can_execute": true,
+      "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
       "signature": "archive_delete_dtako_date(text,text)"
     },
     {
-      "public_can_execute": true,
+      "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
       "signature": "archive_fetch_dtako_rows_json(text,text,bigint,bigint)"
     },
     {
-      "public_can_execute": true,
+      "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
       "signature": "archive_list_dtako_dates()"
     },
     {
-      "public_can_execute": true,
+      "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
       "signature": "archive_list_old_dtako_dates(text)"
     },
     {
-      "public_can_execute": true,
+      "public_can_execute": false,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
       "signature": "archive_upsert_dtako_batch(jsonb)"

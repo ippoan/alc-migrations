@@ -40,7 +40,7 @@
 --   * vehicle_settings_dumps  — 車輛の設定の dump の索引 (migration 110)。RLS を有効にしないまま作られた。
 --                               有効にするのは別の migration で扱う (ここでは、いまの状態を固定するだけ)
 --
--- PUBLIC が EXECUTE できてよい SECURITY DEFINER の関数 (検査 7 の許可リスト。関数の名前で 16 本)。
+-- PUBLIC が EXECUTE できてよい SECURITY DEFINER の関数 (検査 7 の許可リスト。関数の名前で 15 本。lookup_bot_config_for_webhook (102) は 193 で消した)。
 -- migration 158 より前に作られ、PUBLIC の EXECUTE が残っている (PostgreSQL は新しい関数の EXECUTE を
 -- 既定で PUBLIC に付ける)。外す (REVOKE して必要なロールにだけ GRANT する) のは別の migration で扱う。
 -- ここに足さない — 新しい SECURITY DEFINER の関数は 158 の形 (PUBLIC から REVOKE) で作る。
@@ -51,7 +51,6 @@
 --   * get_device_settings_by_id / lookup_device_tenant (063)
 --   * get_trouble_schedule (088)
 --   * list_enabled_line_configs (117)
---   * lookup_bot_config_for_webhook (102)
 --   * lookup_delivery_for_view (107)
 --   * lookup_line_config_by_channel (072)
 --   * lookup_lineworks_channel_for_send (129)
@@ -185,7 +184,7 @@ WITH rt AS (
        AND f.proname NOT IN (
            'close_dtako_ticket_by_token',
            'find_recipient_by_line_user_id', 'find_user_by_line_user_id', 'get_device_settings_by_id',
-           'get_trouble_schedule', 'list_enabled_line_configs', 'lookup_bot_config_for_webhook',
+           'get_trouble_schedule', 'list_enabled_line_configs',
            'lookup_delivery_for_view', 'lookup_device_tenant', 'lookup_line_config_by_channel',
            'lookup_lineworks_channel_for_send', 'lookup_notify_recipient_for_send', 'mark_delivery_read',
            'resolve_sso_config', 'set_current_tenant', 'verify_device_token')

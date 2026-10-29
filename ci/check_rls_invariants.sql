@@ -21,7 +21,7 @@
 --   3. RLS が無効の表は、下の許可リストに在るものだけ
 --   4. alc_api_rt が superuser でも BYPASSRLS でもない
 --   5. alc_api_rt が schema の USAGE、全表 (_sqlx_migrations を除く) の SELECT / INSERT / UPDATE / DELETE、
---      全 sequence の USAGE、SECURITY DEFINER の全関数の EXECUTE を持つ
+--      全 sequence の USAGE、SECURITY DEFINER の全関数の EXECUTE を持つ (archive Job 専用の archive_* 5 本を除く。migration 192)
 --   6. alc_api schema に view / materialized view が無い
 --      (view は所有者の権限で表を読むので、RLS の迂回路になる。許可リストなし)
 --   7. SECURITY DEFINER の関数は、search_path が固定で (proconfig に search_path= が在る)、
@@ -40,13 +40,11 @@
 --   * vehicle_settings_dumps  — 車輛の設定の dump の索引 (migration 110)。RLS を有効にしないまま作られた。
 --                               有効にするのは別の migration で扱う (ここでは、いまの状態を固定するだけ)
 --
--- PUBLIC が EXECUTE できてよい SECURITY DEFINER の関数 (検査 7 の許可リスト。関数の名前で 21 本)。
+-- PUBLIC が EXECUTE できてよい SECURITY DEFINER の関数 (検査 7 の許可リスト。関数の名前で 16 本)。
 -- migration 158 より前に作られ、PUBLIC の EXECUTE が残っている (PostgreSQL は新しい関数の EXECUTE を
 -- 既定で PUBLIC に付ける)。外す (REVOKE して必要なロールにだけ GRANT する) のは別の migration で扱う。
 -- ここに足さない — 新しい SECURITY DEFINER の関数は 158 の形 (PUBLIC から REVOKE) で作る。
 -- 括弧の中は、その関数が最初に出てくる migration:
---   * archive_delete_dtako_date / archive_fetch_dtako_rows_json / archive_list_dtako_dates /
---     archive_list_old_dtako_dates / archive_upsert_dtako_batch (084)
 --   * close_dtako_ticket_by_token (115)
 --   * find_recipient_by_line_user_id (076)
 --   * find_user_by_line_user_id (121)
@@ -152,6 +150,10 @@ WITH rt AS (
      WHERE f.pronamespace = 'alc_api'::regnamespace
        AND f.prosecdef
        AND NOT has_function_privilege(rt.oid, f.oid, 'EXECUTE')
+       -- rust-alc-api の archive Job (alc_api_app) 専用の 5 本は alc_api_rt に渡さない (migration 192)
+       AND f.proname NOT IN (
+           'archive_delete_dtako_date', 'archive_fetch_dtako_rows_json', 'archive_list_dtako_dates',
+           'archive_list_old_dtako_dates', 'archive_upsert_dtako_batch')
 
     UNION ALL
     SELECT 6, 'view ' || c.relname,
@@ -181,8 +183,7 @@ WITH rt AS (
        AND f.prosecdef
        AND has_function_privilege('public', f.oid, 'EXECUTE')
        AND f.proname NOT IN (
-           'archive_delete_dtako_date', 'archive_fetch_dtako_rows_json', 'archive_list_dtako_dates',
-           'archive_list_old_dtako_dates', 'archive_upsert_dtako_batch', 'close_dtako_ticket_by_token',
+           'close_dtako_ticket_by_token',
            'find_recipient_by_line_user_id', 'find_user_by_line_user_id', 'get_device_settings_by_id',
            'get_trouble_schedule', 'list_enabled_line_configs', 'lookup_bot_config_for_webhook',
            'lookup_delivery_for_view', 'lookup_device_tenant', 'lookup_line_config_by_channel',

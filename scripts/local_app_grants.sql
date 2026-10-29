@@ -120,11 +120,6 @@ BEGIN
     END LOOP;
 
     FOREACH fn IN ARRAY ARRAY[
-        'archive_delete_dtako_date(text, text)',
-        'archive_fetch_dtako_rows_json(text, text, bigint, bigint)',
-        'archive_list_dtako_dates()',
-        'archive_list_old_dtako_dates(text)',
-        'archive_upsert_dtako_batch(jsonb)',
         'close_dtako_ticket_by_token(text, text)',
         'find_recipient_by_line_user_id(text)',
         'find_user_by_line_user_id(text)',

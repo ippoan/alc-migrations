@@ -21,7 +21,7 @@
 --   3. RLS が無効の表は、下の許可リストに在るものだけ
 --   4. alc_api_rt が superuser でも BYPASSRLS でもない
 --   5. alc_api_rt が schema の USAGE、全表 (_sqlx_migrations を除く) の SELECT / INSERT / UPDATE / DELETE、
---      全 sequence の USAGE、SECURITY DEFINER の全関数の EXECUTE を持つ (archive Job 専用の archive_* 5 本を除く。migration 192)
+--      全 sequence の USAGE、SECURITY DEFINER の全関数の EXECUTE を持つ
 --   6. alc_api schema に view / materialized view が無い
 --      (view は所有者の権限で表を読むので、RLS の迂回路になる。許可リストなし)
 --   7. SECURITY DEFINER の関数は、search_path が固定で (proconfig に search_path= が在る)、
@@ -149,10 +149,6 @@ WITH rt AS (
      WHERE f.pronamespace = 'alc_api'::regnamespace
        AND f.prosecdef
        AND NOT has_function_privilege(rt.oid, f.oid, 'EXECUTE')
-       -- rust-alc-api の archive Job (alc_api_app) 専用の 5 本は alc_api_rt に渡さない (migration 192)
-       AND f.proname NOT IN (
-           'archive_delete_dtako_date', 'archive_fetch_dtako_rows_json', 'archive_list_dtako_dates',
-           'archive_list_old_dtako_dates', 'archive_upsert_dtako_batch')
 
     UNION ALL
     SELECT 6, 'view ' || c.relname,

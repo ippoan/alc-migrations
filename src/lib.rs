@@ -29,7 +29,7 @@ pub const RLS_INVARIANT_CHECKS: &[(i32, &str)] = &[
     (4, "alc_api_rt が superuser でも BYPASSRLS でもない"),
     (
         5,
-        "alc_api_rt が schema の USAGE、全表 (_sqlx_migrations を除く) の SELECT / INSERT / UPDATE / DELETE、全 sequence の USAGE、SECURITY DEFINER の全関数 (archive Job 専用の archive_* 5 本を除く) の EXECUTE を持つ",
+        "alc_api_rt が schema の USAGE、全表 (_sqlx_migrations を除く) の SELECT / INSERT / UPDATE / DELETE、全 sequence の USAGE、SECURITY DEFINER の全関数の EXECUTE を持つ",
     ),
     (6, "alc_api schema に view / materialized view が無い"),
     (

@@ -313,6 +313,9 @@
       "tenant_isolation_users"
     ],
     "vehicle_settings_dumps": [],
+    "vein_device_records": [
+      "vein_device_records_tenant"
+    ],
     "vein_enroll_events": [
       "vein_enroll_events_tenant"
     ],
@@ -512,7 +515,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 101,
+  "table_count": 102,
   "tables": [
     {
       "count": 18,
@@ -640,7 +643,7 @@
       ]
     },
     {
-      "count": 8,
+      "count": 9,
       "names": [
         "bp_notify_settings",
         "cam_camera_devices",
@@ -649,7 +652,8 @@
         "leave_alerts",
         "leave_grants",
         "leave_opening",
-        "leave_pages"
+        "leave_pages",
+        "vein_device_records"
       ],
       "policies": [
         {

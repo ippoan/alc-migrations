@@ -249,6 +249,9 @@
     "tenko_carrying_item_checks": [
       "carrying_item_checks_tenant"
     ],
+    "tenko_filing_settings": [
+      "tenko_filing_settings_tenant"
+    ],
     "tenko_records": [
       "tenant_isolation_tenko_records"
     ],
@@ -515,7 +518,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 102,
+  "table_count": 103,
   "tables": [
     {
       "count": 18,
@@ -643,7 +646,7 @@
       ]
     },
     {
-      "count": 9,
+      "count": 10,
       "names": [
         "bp_notify_settings",
         "cam_camera_devices",
@@ -653,6 +656,7 @@
         "leave_grants",
         "leave_opening",
         "leave_pages",
+        "tenko_filing_settings",
         "vein_device_records"
       ],
       "policies": [

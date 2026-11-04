@@ -316,6 +316,12 @@
       "tenant_isolation_users"
     ],
     "vehicle_settings_dumps": [],
+    "vein_auth_judgments": [
+      "vein_auth_judgments_tenant"
+    ],
+    "vein_auth_shots": [
+      "vein_auth_shots_tenant"
+    ],
     "vein_device_records": [
       "vein_device_records_tenant"
     ],
@@ -508,6 +514,12 @@
       "signature": "set_current_tenant(text)"
     },
     {
+      "public_can_execute": false,
+      "runtime_role_can_execute": true,
+      "search_path": "alc_api",
+      "signature": "vein_auth_shots_purge()"
+    },
+    {
       "public_can_execute": true,
       "runtime_role_can_execute": true,
       "search_path": "alc_api",
@@ -518,7 +530,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 103,
+  "table_count": 105,
   "tables": [
     {
       "count": 18,
@@ -646,7 +658,7 @@
       ]
     },
     {
-      "count": 10,
+      "count": 11,
       "names": [
         "bp_notify_settings",
         "cam_camera_devices",
@@ -657,6 +669,7 @@
         "leave_opening",
         "leave_pages",
         "tenko_filing_settings",
+        "vein_auth_judgments",
         "vein_device_records"
       ],
       "policies": [
@@ -810,6 +823,33 @@
           ],
           "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
           "with_check": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": false,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 2,
+      "names": [
+        "machine_credentials",
+        "vein_auth_shots"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
+          "with_check": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)"
         }
       ],
       "rls_enabled": true,
@@ -1145,32 +1185,6 @@
           ],
           "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
           "with_check": "((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid) AND ((lineworks_channel_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM lineworks_channels p\n  WHERE ((p.id = leave_settings.lineworks_channel_id) AND (p.tenant_id = leave_settings.tenant_id))))) AND ((notify_recipient_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM notify_recipients p\n  WHERE ((p.id = leave_settings.notify_recipient_id) AND (p.tenant_id = leave_settings.tenant_id))))) AND ((notify_bot_config_id IS NULL) OR (EXISTS ( SELECT 1\n   FROM bot_configs p\n  WHERE ((p.id = leave_settings.notify_bot_config_id) AND (p.tenant_id = leave_settings.tenant_id))))))"
-        }
-      ],
-      "rls_enabled": true,
-      "rls_forced": false,
-      "runtime_role_can_act_as_owner": false,
-      "runtime_role_privileges": [
-        "SELECT",
-        "INSERT",
-        "UPDATE",
-        "DELETE"
-      ]
-    },
-    {
-      "count": 1,
-      "names": [
-        "machine_credentials"
-      ],
-      "policies": [
-        {
-          "command": "ALL",
-          "permissive": true,
-          "roles": [
-            "public"
-          ],
-          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
-          "with_check": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)"
         }
       ],
       "rls_enabled": true,

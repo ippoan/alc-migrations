@@ -31,6 +31,9 @@ CREATE TABLE alc_api.vein_auth_shots (
     -- モジュールの点数 (SCORE=) と閾値 (THS=)。古いファームは出さないので NULL
     module_score INT NULL,
     module_thresholds INT[] NULL,
+    -- 端末がそのとき記録をどう組んで取っていたか (own = その端末の記録だけ / NULL = 混ぜた記録)。
+    -- 判定し直しで本人の記録を同じ組み方で組むため
+    pick TEXT NULL CHECK (pick IN ('own')),
     -- 撮影の形: ファームの 1 本撮りの記録 (record) / 0xbdbd の特徴量 (chara)
     shot_kind TEXT NOT NULL CHECK (shot_kind IN ('record', 'chara')),
     -- 撮影 (base64) を worker が暗号化したもの。復号の鍵は DB に無い

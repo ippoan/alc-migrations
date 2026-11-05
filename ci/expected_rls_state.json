@@ -117,6 +117,9 @@
     "employees": [
       "tenant_isolation_employees"
     ],
+    "equipment_failure_history": [
+      "equipment_failure_history_tenant"
+    ],
     "equipment_failures": [
       "tenant_isolation_equipment_failures"
     ],
@@ -260,6 +263,9 @@
     ],
     "tenko_sessions": [
       "tenant_isolation_tenko_sessions"
+    ],
+    "tenko_settings": [
+      "tenko_settings_tenant"
     ],
     "timecard_cards": [
       "tenant_isolation_timecard_cards"
@@ -530,7 +536,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 105,
+  "table_count": 107,
   "tables": [
     {
       "count": 18,
@@ -658,7 +664,7 @@
       ]
     },
     {
-      "count": 11,
+      "count": 12,
       "names": [
         "bp_notify_settings",
         "cam_camera_devices",
@@ -669,6 +675,7 @@
         "leave_opening",
         "leave_pages",
         "tenko_filing_settings",
+        "tenko_settings",
         "vein_auth_judgments",
         "vein_device_records"
       ],
@@ -1081,6 +1088,32 @@
           ],
           "using": "(tenant_id = (current_setting('app.current_tenant_id'::text))::uuid)",
           "with_check": null
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
+      "count": 1,
+      "names": [
+        "equipment_failure_history"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "((tenant_id = (current_setting('app.current_tenant_id'::text))::uuid) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))",
+          "with_check": "((tenant_id = (current_setting('app.current_tenant_id'::text))::uuid) AND (is_dev = (COALESCE(current_setting('app.device_dev'::text, true), ''::text) = '1'::text)))"
         }
       ],
       "rls_enabled": true,

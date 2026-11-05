@@ -206,8 +206,8 @@ BEGIN
     ] LOOP
         BEGIN
             IF v_tbl = 'tenko_records' THEN
-                -- 完了済みの行の UPDATE は trigger が RLS より先に止める (検査 7)。
-                -- 完了していない行を作って確かめる (拒否の例外で、この行ごと巻き戻る)。
+                -- tenko_records の UPDATE は全ての行で trigger が RLS より先に止める (検査 7、204)。
+                -- 見える行を 1 つ作って、書き換えが通らないことを確かめる (例外で、この行ごと巻き戻る)。
                 INSERT INTO alc_api.tenko_records
                     (tenant_id, session_id, employee_id, tenko_type, status, record_data, employee_name, record_hash)
                 SELECT s.tenant_id, s.id, s.employee_id, 'post_operation', 'cancelled', '{}', 'ci check', 'ci check'
@@ -218,8 +218,15 @@ BEGIN
             ELSE
                 EXECUTE format('UPDATE alc_api.%I SET is_dev = %L', v_tbl, p_to);
             END IF;
-        EXCEPTION WHEN insufficient_privilege THEN
-            CONTINUE;
+        EXCEPTION
+            WHEN insufficient_privilege THEN
+                CONTINUE;
+            WHEN raise_exception THEN
+                IF v_tbl = 'tenko_records'
+                   AND SQLERRM = 'tenko_records cannot be modified or deleted (tamper prevention)' THEN
+                    CONTINUE;
+                END IF;
+                RAISE;
         END;
         RAISE EXCEPTION 'alc_api.% の is_dev を % へ書き換える UPDATE が RLS で拒否されなかった', v_tbl, p_to;
     END LOOP;
@@ -486,17 +493,36 @@ BEGIN
 END
 $$;
 
--- 7. tenko_records の trigger は列の追加で壊れていない (完了済みの行の UPDATE は従来どおり例外)。
+-- 7. tenko_records の trigger は列の追加で壊れていない (204 から、完了・中止・中断のどの行も UPDATE / DELETE は例外)。
 DO $$
+DECLARE
+    v_status TEXT;
 BEGIN
-    BEGIN
-        UPDATE alc_api.tenko_records SET location = 'ci check' WHERE status = 'completed';
-        RAISE EXCEPTION '7: 完了済みの tenko_records を UPDATE できてしまった';
-    EXCEPTION WHEN raise_exception THEN
-        ASSERT SQLERRM = 'Cannot modify completed tenko record',
-            format('7: 想定と違う例外: %s', SQLERRM);
-    END;
-    RAISE NOTICE 'ok 7: 完了済みの tenko_records の UPDATE は trigger が止める';
+    FOREACH v_status IN ARRAY ARRAY['completed', 'cancelled', 'interrupted'] LOOP
+        IF NOT EXISTS (SELECT 1 FROM alc_api.tenko_records WHERE status = v_status) THEN
+            INSERT INTO alc_api.tenko_records
+                (tenant_id, session_id, employee_id, tenko_type, status, record_data, employee_name, record_hash)
+            SELECT s.tenant_id, s.id, s.employee_id, 'pre_operation', v_status, '{}', 'ci check', 'ci check'
+              FROM alc_api.tenko_sessions s
+             ORDER BY s.created_at
+             LIMIT 1;
+        END IF;
+        BEGIN
+            UPDATE alc_api.tenko_records SET location = 'ci check' WHERE status = v_status;
+            RAISE EXCEPTION '7: % の tenko_records を UPDATE できてしまった', v_status;
+        EXCEPTION WHEN raise_exception THEN
+            ASSERT SQLERRM = 'tenko_records cannot be modified or deleted (tamper prevention)',
+                format('7: 想定と違う例外: %s', SQLERRM);
+        END;
+        BEGIN
+            DELETE FROM alc_api.tenko_records WHERE status = v_status;
+            RAISE EXCEPTION '7: % の tenko_records を DELETE できてしまった', v_status;
+        EXCEPTION WHEN raise_exception THEN
+            ASSERT SQLERRM = 'tenko_records cannot be modified or deleted (tamper prevention)',
+                format('7: 想定と違う例外: %s', SQLERRM);
+        END;
+    END LOOP;
+    RAISE NOTICE 'ok 7: tenko_records の UPDATE / DELETE は status に依らず trigger が止める';
 END
 $$;
 
@@ -580,6 +606,61 @@ BEGIN
                  WHERE a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)) = ARRAY['employee_id', 'tenant_id']
     ), '11: vein_templates の 2 列 UNIQUE (151) が消えている (worker 切替前に落としてはいけない)';
     RAISE NOTICE 'ok 11: vein_templates は 3 列 unique index を足し、2 列 UNIQUE も残している';
+END
+$$;
+
+-- 12. 機器故障 (migration 204): UPDATE のたびに変更前の行が equipment_failure_history に残り、
+--     故障の行も履歴の行も消せず、履歴は書き換えられない。
+DO $$
+DECLARE
+    v_failure UUID;
+    v_rows    BIGINT;
+    v_old     JSONB;
+BEGIN
+    PERFORM alc_api.set_current_tenant(current_setting('chk.tenant_id'));
+    PERFORM set_config('app.device_dev', '', false);
+
+    INSERT INTO alc_api.equipment_failures (tenant_id, failure_type, description)
+    VALUES (current_setting('chk.tenant_id')::UUID, 'kiosk_offline', 'ci check')
+    RETURNING id INTO v_failure;
+
+    UPDATE alc_api.equipment_failures SET resolved_at = NOW(), resolution_notes = 'ci 1' WHERE id = v_failure;
+    UPDATE alc_api.equipment_failures SET resolution_notes = 'ci 2' WHERE id = v_failure;
+    SELECT count(*) INTO v_rows FROM alc_api.equipment_failure_history WHERE failure_id = v_failure;
+    ASSERT v_rows = 2, format('12: UPDATE 2 回で履歴が %s 行 (2 行のはず)', v_rows);
+    SELECT old_row INTO STRICT v_old FROM alc_api.equipment_failure_history
+     WHERE failure_id = v_failure AND old_row->>'resolved_at' IS NULL;
+    ASSERT v_old->>'description' = 'ci check',
+        format('12: 1 つ目の履歴が変更前の行でない: %s', v_old);
+
+    BEGIN
+        DELETE FROM alc_api.equipment_failures WHERE id = v_failure;
+        RAISE EXCEPTION '12: equipment_failures を DELETE できてしまった';
+    EXCEPTION WHEN raise_exception THEN
+        ASSERT SQLERRM = 'equipment_failures cannot be deleted (tamper prevention)',
+            format('12: 想定と違う例外: %s', SQLERRM);
+    END;
+    BEGIN
+        UPDATE alc_api.equipment_failure_history SET old_row = '{}' WHERE failure_id = v_failure;
+        RAISE EXCEPTION '12: equipment_failure_history を UPDATE できてしまった';
+    EXCEPTION
+        WHEN raise_exception THEN
+            ASSERT SQLERRM = 'equipment_failure_history cannot be modified or deleted (tamper prevention)',
+                format('12: 想定と違う例外: %s', SQLERRM);
+        WHEN insufficient_privilege THEN
+            NULL;
+    END;
+    BEGIN
+        DELETE FROM alc_api.equipment_failure_history WHERE failure_id = v_failure;
+        RAISE EXCEPTION '12: equipment_failure_history を DELETE できてしまった';
+    EXCEPTION
+        WHEN raise_exception THEN
+            ASSERT SQLERRM = 'equipment_failure_history cannot be modified or deleted (tamper prevention)',
+                format('12: 想定と違う例外: %s', SQLERRM);
+        WHEN insufficient_privilege THEN
+            NULL;
+    END;
+    RAISE NOTICE 'ok 12: 機器故障は変更前の行が履歴に残り、故障も履歴も消せない';
 END
 $$;
 

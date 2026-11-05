@@ -255,6 +255,12 @@
     "tenko_filing_settings": [
       "tenko_filing_settings_tenant"
     ],
+    "tenko_office_managers": [
+      "tenko_office_managers_tenant"
+    ],
+    "tenko_offices": [
+      "tenko_offices_tenant"
+    ],
     "tenko_records": [
       "tenant_isolation_tenko_records"
     ],
@@ -536,7 +542,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 107,
+  "table_count": 109,
   "tables": [
     {
       "count": 18,
@@ -664,7 +670,7 @@
       ]
     },
     {
-      "count": 12,
+      "count": 14,
       "names": [
         "bp_notify_settings",
         "cam_camera_devices",
@@ -675,6 +681,8 @@
         "leave_opening",
         "leave_pages",
         "tenko_filing_settings",
+        "tenko_office_managers",
+        "tenko_offices",
         "tenko_settings",
         "vein_auth_judgments",
         "vein_device_records"

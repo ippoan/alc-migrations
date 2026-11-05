@@ -258,6 +258,9 @@
     "tenko_office_carins_bases": [
       "tenko_office_carins_bases_tenant"
     ],
+    "tenko_office_devices": [
+      "tenko_office_devices_tenant"
+    ],
     "tenko_office_managers": [
       "tenko_office_managers_tenant"
     ],
@@ -545,7 +548,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 110,
+  "table_count": 111,
   "tables": [
     {
       "count": 18,
@@ -634,7 +637,7 @@
       ]
     },
     {
-      "count": 15,
+      "count": 16,
       "names": [
         "bp_notify_settings",
         "cam_camera_devices",
@@ -646,6 +649,7 @@
         "leave_pages",
         "tenko_filing_settings",
         "tenko_office_carins_bases",
+        "tenko_office_devices",
         "tenko_office_managers",
         "tenko_offices",
         "tenko_settings",

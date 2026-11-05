@@ -255,6 +255,9 @@
     "tenko_filing_settings": [
       "tenko_filing_settings_tenant"
     ],
+    "tenko_office_carins_bases": [
+      "tenko_office_carins_bases_tenant"
+    ],
     "tenko_office_managers": [
       "tenko_office_managers_tenant"
     ],
@@ -542,7 +545,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 109,
+  "table_count": 110,
   "tables": [
     {
       "count": 18,
@@ -631,6 +634,46 @@
       ]
     },
     {
+      "count": 15,
+      "names": [
+        "bp_notify_settings",
+        "cam_camera_devices",
+        "cam_clips",
+        "cam_stream_devices",
+        "leave_alerts",
+        "leave_grants",
+        "leave_opening",
+        "leave_pages",
+        "tenko_filing_settings",
+        "tenko_office_carins_bases",
+        "tenko_office_managers",
+        "tenko_offices",
+        "tenko_settings",
+        "vein_auth_judgments",
+        "vein_device_records"
+      ],
+      "policies": [
+        {
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
+          "with_check": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)"
+        }
+      ],
+      "rls_enabled": true,
+      "rls_forced": true,
+      "runtime_role_can_act_as_owner": false,
+      "runtime_role_privileges": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    {
       "count": 14,
       "names": [
         "bot_configs",
@@ -657,45 +700,6 @@
           ],
           "using": "(tenant_id = COALESCE((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid, (NULLIF(current_setting('app.current_organization_id'::text, true), ''::text))::uuid))",
           "with_check": "(tenant_id = COALESCE((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid, (NULLIF(current_setting('app.current_organization_id'::text, true), ''::text))::uuid))"
-        }
-      ],
-      "rls_enabled": true,
-      "rls_forced": true,
-      "runtime_role_can_act_as_owner": false,
-      "runtime_role_privileges": [
-        "SELECT",
-        "INSERT",
-        "UPDATE",
-        "DELETE"
-      ]
-    },
-    {
-      "count": 14,
-      "names": [
-        "bp_notify_settings",
-        "cam_camera_devices",
-        "cam_clips",
-        "cam_stream_devices",
-        "leave_alerts",
-        "leave_grants",
-        "leave_opening",
-        "leave_pages",
-        "tenko_filing_settings",
-        "tenko_office_managers",
-        "tenko_offices",
-        "tenko_settings",
-        "vein_auth_judgments",
-        "vein_device_records"
-      ],
-      "policies": [
-        {
-          "command": "ALL",
-          "permissive": true,
-          "roles": [
-            "public"
-          ],
-          "using": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)",
-          "with_check": "(tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid)"
         }
       ],
       "rls_enabled": true,

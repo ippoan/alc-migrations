@@ -267,6 +267,9 @@
     "tenko_filing_settings": [
       "tenko_filing_settings_tenant"
     ],
+    "tenko_filings": [
+      "tenko_filings_tenant"
+    ],
     "tenko_office_carins_bases": [
       "tenko_office_carins_bases_tenant"
     ],
@@ -566,10 +569,10 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 115,
+  "table_count": 116,
   "tables": [
     {
-      "count": 20,
+      "count": 21,
       "names": [
         "bp_notify_settings",
         "cam_camera_devices",
@@ -584,6 +587,7 @@
         "tenko_consignments",
         "tenko_filing_archive_companies",
         "tenko_filing_settings",
+        "tenko_filings",
         "tenko_office_carins_bases",
         "tenko_office_devices",
         "tenko_office_managers",

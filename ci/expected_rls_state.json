@@ -270,6 +270,9 @@
     "tenko_filings": [
       "tenko_filings_tenant"
     ],
+    "tenko_identity_events": [
+      "tenant_isolation_tenko_identity_events"
+    ],
     "tenko_office_carins_bases": [
       "tenko_office_carins_bases_tenant"
     ],
@@ -578,7 +581,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 117,
+  "table_count": 118,
   "tables": [
     {
       "count": 21,
@@ -752,11 +755,12 @@
       ]
     },
     {
-      "count": 9,
+      "count": 10,
       "names": [
         "equipment_failures",
         "hub_measurements",
         "measurements",
+        "tenko_identity_events",
         "tenko_record_judgments",
         "tenko_records",
         "tenko_schedules",

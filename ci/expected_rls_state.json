@@ -282,6 +282,9 @@
     "tenko_offices": [
       "tenko_offices_tenant"
     ],
+    "tenko_record_judgments": [
+      "tenant_isolation_tenko_record_judgments"
+    ],
     "tenko_records": [
       "tenant_isolation_tenko_records"
     ],
@@ -575,7 +578,7 @@
     "count": 12,
     "runtime_role_usage_missing": []
   },
-  "table_count": 116,
+  "table_count": 117,
   "tables": [
     {
       "count": 21,
@@ -749,11 +752,12 @@
       ]
     },
     {
-      "count": 8,
+      "count": 9,
       "names": [
         "equipment_failures",
         "hub_measurements",
         "measurements",
+        "tenko_record_judgments",
         "tenko_records",
         "tenko_schedules",
         "tenko_sessions",
